@@ -1,0 +1,8 @@
+sku,compound_mg,qty_ordered,batch_number,vendor,unit_price,date_ordered,tracking_number,shipping_cost,logged_by,notes,status
+BPC-157-5mg,BPC-157 5mg,100,BATCH-001,PeptideSciences,12.50,2026-01-10,1Z999AA10123456784,25.00,Camila,First order of the year,received
+TB-500-2mg,TB-500 2mg,50,BATCH-002,ChinaPeptides,18.00,2026-01-15,1Z999AA10123456785,15.00,Aiden,,received
+BPC-157-5mg,BPC-157 5mg,200,BATCH-003,PeptideSciences,11.75,2026-02-01,1Z999AA10123456786,30.00,Camila,Bulk order discount,in_testing
+Sermorelin-2mg,Sermorelin 2mg,75,BATCH-004,Peptide2You,22.00,2026-02-10,1Z999AA10123456787,20.00,Peyton,,received
+GHK-Cu-50mg,GHK-Cu 50mg,30,BATCH-005,BlueSkyPeptides,45.00,2026-02-20,1Z999AA10123456788,18.00,Camila,,ordered
+IGF-1-LR3-1mg,IGF-1 LR3 1mg,60,BATCH-006,PeptideSciences,35.00,2026-03-01,1Z999AA10123456789,22.00,Aiden,,ordered
+TB-500-2mg,TB-500 2mg,100,BATCH-007,ChinaPeptides,17.50,2026-03-05,1Z999AA10123456790,28.00,Camila,,ordered

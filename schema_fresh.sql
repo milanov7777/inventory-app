@@ -1,0 +1,19 @@
+-- Run this entire block as one query in Supabase SQL Editor
+BEGIN;
+
+-- Nuke everything
+DROP VIEW IF EXISTS sku_qty_summary CASCADE;
+DROP TABLE IF EXISTS on_website CASCADE;
+DROP TABLE IF EXISTS approved CASCADE;
+DROP TABLE IF EXISTS testing CASCADE;
+DROP TABLE IF EXISTS received CASCADE;
+DROP TABLE IF EXISTS orders CASCADE;
+DROP TABLE IF EXISTS audit_log CASCADE;
+DROP TABLE IF EXISTS sku_thresholds CASCADE;
+DROP TABLE IF EXISTS slack_notification_log CASCADE;
+DROP TYPE IF EXISTS order_status CASCADE;
+DROP TYPE IF EXISTS storage_location CASCADE;
+DROP TYPE IF EXISTS pass_fail_result CASCADE;
+DROP TYPE IF EXISTS coa_status CASCADE;
+
+COMMIT;

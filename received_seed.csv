@@ -1,0 +1,5 @@
+batch_number,sku,compound_mg,qty_received,date_received,storage,cap_color,logged_by,notes
+BATCH-001,BPC-157-5mg,BPC-157 5mg,100,2026-01-14,fridge,Blue,Camila,All vials intact
+BATCH-002,TB-500-2mg,TB-500 2mg,50,2026-01-18,fridge,Red,Aiden,
+BATCH-003,BPC-157-5mg,BPC-157 5mg,200,2026-02-05,fridge,Blue,Camila,Bulk shipment received
+BATCH-004,Sermorelin-2mg,Sermorelin 2mg,75,2026-02-14,fridge,Green,Peyton,
