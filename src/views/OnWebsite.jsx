@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useOnWebsite } from '../hooks/useOnWebsite.js'
 import { useOrders } from '../hooks/useOrders.js'
+import { useWooProducts } from '../hooks/useWooProducts.js'
 import Table from '../components/Table.jsx'
 import SearchFilter from '../components/SearchFilter.jsx'
 import SlidePanel from '../components/SlidePanel.jsx'
@@ -9,6 +10,9 @@ import { formatDate, toISODate } from '../utils/formatDate.js'
 import { exportCsv } from '../utils/exportCsv.js'
 
 const columns = [
+  { key: 'source_badge', label: '', render: (_, row) => row._source === 'woocommerce' ? (
+    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700">WC</span>
+  ) : null },
   { key: 'batch_number', label: 'Batch #', sticky: true },
   { key: 'sku', label: 'SKU' },
   { key: 'compound_mg', label: 'Compound & MG', bold: true },
@@ -33,6 +37,7 @@ const emptyForm = { batch_number: '', sku: '', compound_mg: '', qty_listed: '', 
 export default function OnWebsite({ user }) {
   const { onWebsite, loading, error, addOnWebsite, updateOnWebsite, deleteOnWebsite } = useOnWebsite()
   const { orders } = useOrders()
+  const { wooProducts, wooLoading, refetchWoo } = useWooProducts()
   const [filters, setFilters] = useState({})
   const [panelMode, setPanelMode] = useState(null)
   const [selectedRow, setSelectedRow] = useState(null)
@@ -47,31 +52,64 @@ export default function OnWebsite({ user }) {
     return map
   }, [orders])
 
+  // Enrich manual pipeline entries with order data
   const enriched = useMemo(() =>
     onWebsite.map((r) => {
       const o = orderMap[r.batch_number] || {}
-      return { ...r, vendor: o.vendor, unit_price: o.unit_price, total_value: o.total_value, qty_ordered: o.qty_ordered, logged_by: o.logged_by }
+      return { ...r, vendor: o.vendor, unit_price: o.unit_price, total_value: o.total_value, qty_ordered: o.qty_ordered, logged_by: o.logged_by, _source: 'pipeline' }
     }),
     [onWebsite, orderMap]
   )
 
+  // Map WooCommerce products to table row format
+  const wooRows = useMemo(() =>
+    wooProducts.map((p) => ({
+      id: `woo-${p.woo_id}`,
+      batch_number: '—',
+      sku: p.sku,
+      compound_mg: p.name,
+      vendor: '',
+      qty_ordered: null,
+      unit_price: null,
+      total_value: null,
+      qty_listed: p.stock_quantity,
+      date_listed: null,
+      price_listed: p.price ? Number(p.price) : null,
+      logged_by: '',
+      notes: p.stock_status === 'instock' ? 'In Stock' : p.stock_status === 'outofstock' ? 'Out of Stock' : p.stock_status,
+      _source: 'woocommerce',
+    })),
+    [wooProducts]
+  )
+
+  // Merge pipeline entries + WooCommerce products
+  const allRows = useMemo(() => [...enriched, ...wooRows], [enriched, wooRows])
+
   const filtered = useMemo(() => {
-    return enriched.filter((row) => {
+    return allRows.filter((row) => {
       const s = filters.search?.toLowerCase() || ''
       if (s && !row.sku?.toLowerCase().includes(s) && !row.compound_mg?.toLowerCase().includes(s)) return false
-      if (filters.date_listed_from && row.date_listed < filters.date_listed_from) return false
-      if (filters.date_listed_to && row.date_listed > filters.date_listed_to) return false
+      if (row._source !== 'woocommerce') {
+        if (filters.date_listed_from && row.date_listed < filters.date_listed_from) return false
+        if (filters.date_listed_to && row.date_listed > filters.date_listed_to) return false
+      }
       return true
     })
-  }, [enriched, filters])
+  }, [allRows, filters])
 
   const f = (key, value) => setForm((p) => ({ ...p, [key]: value }))
 
   function openAdd() { setForm({ ...emptyForm }); setFormError(null); setPanelMode('add') }
   function openEdit(row) {
+    if (row._source === 'woocommerce') return // WooCommerce rows are read-only
     setSelectedRow(row)
     setForm({ batch_number: row.batch_number, sku: row.sku, compound_mg: row.compound_mg, qty_listed: row.qty_listed, date_listed: row.date_listed, price_listed: row.price_listed, notes: row.notes || '' })
     setFormError(null); setPanelMode('edit')
+  }
+
+  function handleDeleteClick(row) {
+    if (row._source === 'woocommerce') return // WooCommerce rows are read-only
+    setConfirmRow(row)
   }
 
   async function handleSave(e) {
@@ -91,7 +129,7 @@ export default function OnWebsite({ user }) {
   }
 
   function handleExport() {
-    exportCsv(filtered, columns.map((c) => ({ key: c.key, label: c.label })), 'on-website.csv')
+    exportCsv(filtered, columns.filter(c => c.key !== 'source_badge').map((c) => ({ key: c.key, label: c.label })), 'on-website.csv')
   }
 
   if (error) return <div className="text-red-600 text-sm p-4">Error: {error}</div>
@@ -101,13 +139,16 @@ export default function OnWebsite({ user }) {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold text-gray-900">On Website</h2>
         <div className="flex gap-2">
+          <button onClick={refetchWoo} disabled={wooLoading} className="text-sm px-4 py-2 bg-white border border-purple-200 text-purple-700 rounded-lg hover:bg-purple-50 shadow-sm disabled:opacity-50">
+            {wooLoading ? 'Syncing…' : 'Sync WooCommerce'}
+          </button>
           <button onClick={handleExport} className="text-sm px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 shadow-sm">Export CSV</button>
           <button onClick={openAdd} className="text-sm px-4 py-2 bg-lime-600 text-white rounded-lg hover:bg-lime-700 shadow-sm">+ Add Listing</button>
         </div>
       </div>
       <SearchFilter fields={filterFields} onFilter={setFilters} />
       {loading ? <div className="text-center py-12 text-gray-400">Loading…</div> : (
-        <Table columns={columns} rows={filtered} onEdit={openEdit} onDelete={(row) => setConfirmRow(row)} emptyMessage="No live listings yet." />
+        <Table columns={columns} rows={filtered} onEdit={openEdit} onDelete={handleDeleteClick} emptyMessage="No live listings yet." />
       )}
 
       <SlidePanel isOpen={panelMode === 'add' || panelMode === 'edit'} onClose={() => setPanelMode(null)} title={panelMode === 'add' ? 'New Listing' : 'Edit Listing'}>
