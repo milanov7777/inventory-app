@@ -47,16 +47,49 @@ Deno.serve(async (req) => {
       page++;
     }
 
-    // Map to a clean format for the client
-    const mapped = allProducts.map((p: Record<string, unknown>) => ({
-      woo_id: p.id,
-      sku: (p.sku as string) || "",
-      name: (p.name as string) || "",
-      price: (p.price as string) || "0",
-      stock_quantity: (p.stock_quantity as number) ?? 0,
-      stock_status: (p.stock_status as string) || "unknown",
-      source: "woocommerce",
-    }));
+    // Fetch variations for variable products
+    const mapped: Record<string, unknown>[] = [];
+
+    for (const p of allProducts) {
+      const pType = p.type as string;
+      const variations = p.variations as number[] | undefined;
+
+      if (pType === "variable" && variations && variations.length > 0) {
+        // Fetch all variations for this product
+        const varUrl = `${WOO_URL}/wp-json/wc/v3/products/${p.id}/variations?per_page=100&consumer_key=${WOO_KEY}&consumer_secret=${WOO_SECRET}`;
+        const varRes = await fetch(varUrl);
+        if (varRes.ok) {
+          const varData = await varRes.json();
+          for (const v of varData as Record<string, unknown>[]) {
+            const attrs = (v.attributes as { name: string; option: string }[]) || [];
+            const attrLabel = attrs.map((a) => a.option).join(", ");
+            const varName = attrLabel
+              ? `${p.name} — ${attrLabel}`
+              : (p.name as string);
+            mapped.push({
+              woo_id: v.id,
+              sku: (v.sku as string) || (p.sku as string) || "",
+              name: varName,
+              price: (v.price as string) || "0",
+              stock_quantity: (v.stock_quantity as number) ?? 0,
+              stock_status: (v.stock_status as string) || "unknown",
+              source: "woocommerce",
+            });
+          }
+        }
+      } else {
+        // Simple product — add directly
+        mapped.push({
+          woo_id: p.id,
+          sku: (p.sku as string) || "",
+          name: (p.name as string) || "",
+          price: (p.price as string) || "0",
+          stock_quantity: (p.stock_quantity as number) ?? 0,
+          stock_status: (p.stock_status as string) || "unknown",
+          source: "woocommerce",
+        });
+      }
+    }
 
     return new Response(
       JSON.stringify(mapped),

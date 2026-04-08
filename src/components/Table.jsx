@@ -22,6 +22,36 @@ export default function Table({
   emptyMessage = 'No records found.',
 }) {
   const [tooltip, setTooltip] = useState(null)
+  const [sortKey, setSortKey] = useState(null)
+  const [sortDir, setSortDir] = useState('asc') // 'asc' or 'desc'
+
+  function handleSort(key) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  const sortedRows = sortKey
+    ? [...rows].sort((a, b) => {
+        let va = a[sortKey] ?? ''
+        let vb = b[sortKey] ?? ''
+        // Try numeric comparison
+        const na = Number(va)
+        const nb = Number(vb)
+        if (!isNaN(na) && !isNaN(nb) && va !== '' && vb !== '') {
+          return sortDir === 'asc' ? na - nb : nb - na
+        }
+        // String comparison
+        va = String(va).toLowerCase()
+        vb = String(vb).toLowerCase()
+        if (va < vb) return sortDir === 'asc' ? -1 : 1
+        if (va > vb) return sortDir === 'asc' ? 1 : -1
+        return 0
+      })
+    : rows
 
   if (rows.length === 0) {
     return (
@@ -39,11 +69,15 @@ export default function Table({
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`px-4 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap ${
+                  onClick={() => col.label && handleSort(col.key)}
+                  className={`px-4 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap select-none ${
                     col.sticky ? 'sticky left-0 bg-gray-50 z-10' : ''
-                  }`}
+                  } ${col.label ? 'cursor-pointer hover:text-gray-700' : ''}`}
                 >
                   {col.label}
+                  {sortKey === col.key && (
+                    <span className="ml-1 text-blue-500">{sortDir === 'asc' ? '▲' : '▼'}</span>
+                  )}
                 </th>
               ))}
               {(onEdit || onDelete || onPromote) && (
@@ -54,7 +88,7 @@ export default function Table({
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
-            {rows.map((row, i) => {
+            {sortedRows.map((row, i) => {
               const isHighlighted = highlightRows && highlightRows.has(row.batch_number)
               const customClass = rowClassName ? rowClassName(row) : null
               return (
@@ -157,7 +191,7 @@ export default function Table({
 
       {/* Mobile card layout */}
       <div className="md:hidden space-y-3">
-        {rows.map((row, i) => (
+        {sortedRows.map((row, i) => (
           <div
             key={row.id || i}
             onClick={() => onRowClick && onRowClick(row)}
