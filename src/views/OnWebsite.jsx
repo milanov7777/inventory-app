@@ -79,8 +79,14 @@ export default function OnWebsite({ user }) {
       notes: p.stock_status === 'instock' ? 'In Stock' : p.stock_status === 'outofstock' ? 'Out of Stock' : p.stock_status,
       _source: 'woocommerce',
     })).sort((a, b) => {
+      const prefixOrder = { 'P': 0, 'RETA': 0, 'BPC': 0, 'MOTS': 0, 'R': 1, 'H': 1, 'NS': 2, 'C': 3, 'L': 4 }
       const pa = a.sku.match(/^([A-Za-z]+)-?(\d+)/)
       const pb = b.sku.match(/^([A-Za-z]+)-?(\d+)/)
+      const prefA = pa ? pa[1].toUpperCase() : a.sku.toUpperCase()
+      const prefB = pb ? pb[1].toUpperCase() : b.sku.toUpperCase()
+      const orderA = prefixOrder[prefA] ?? 5
+      const orderB = prefixOrder[prefB] ?? 5
+      if (orderA !== orderB) return orderA - orderB
       if (pa && pb) {
         if (pa[1] !== pb[1]) return pa[1].localeCompare(pb[1])
         return Number(pa[2]) - Number(pb[2])
