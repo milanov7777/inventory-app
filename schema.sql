@@ -195,6 +195,126 @@ alter table slack_notification_log enable row level security;
 create policy "allow all" on slack_notification_log for all using (true) with check (true);
 
 -- ============================================================
+-- TABLE: sales_history  (WooCommerce order line items)
+-- ============================================================
+create table sales_history (
+  id              uuid primary key default uuid_generate_v4(),
+  woo_order_id    bigint not null,
+  order_date      timestamptz not null,
+  order_status    text not null,
+  sku             text not null,
+  product_id      bigint,
+  variation_id    bigint,
+  product_name    text,
+  quantity        integer not null,
+  line_total      numeric(10, 2),
+  created_at      timestamptz not null default now()
+);
+
+create unique index idx_sales_history_dedup
+  on sales_history (woo_order_id, sku, coalesce(variation_id, 0));
+create index idx_sales_history_sku_date on sales_history (sku, order_date desc);
+create index idx_sales_history_order_date on sales_history (order_date desc);
+
+alter table sales_history enable row level security;
+create policy "allow all" on sales_history for all using (true) with check (true);
+
+-- ============================================================
+-- TABLE: vendor_lead_times
+-- ============================================================
+create table vendor_lead_times (
+  id              uuid primary key default uuid_generate_v4(),
+  vendor_name     text not null,
+  sku             text,
+  lead_time_days  integer not null check (lead_time_days >= 0),
+  is_domestic     boolean not null default false,
+  notes           text,
+  updated_by      text not null,
+  updated_at      timestamptz not null default now(),
+  created_at      timestamptz not null default now()
+);
+
+create unique index idx_vendor_lead_unique
+  on vendor_lead_times (vendor_name, coalesce(sku, ''));
+
+alter table vendor_lead_times enable row level security;
+create policy "allow all" on vendor_lead_times for all using (true) with check (true);
+
+-- ============================================================
+-- TABLE: sync_metadata
+-- ============================================================
+create table sync_metadata (
+  key        text primary key,
+  value      text not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table sync_metadata enable row level security;
+create policy "allow all" on sync_metadata for all using (true) with check (true);
+
+-- ============================================================
+-- FUNCTION: get_forecast_metrics
+-- ============================================================
+create or replace function get_forecast_metrics()
+returns jsonb language plpgsql as $$
+declare result jsonb;
+begin
+  with daily_sales as (
+    select sku, product_name, product_id, variation_id,
+      date_trunc('day', order_date) as sale_date,
+      sum(quantity) as daily_qty
+    from sales_history
+    where order_status in ('completed', 'delivered', 'processing')
+    group by sku, product_name, product_id, variation_id, date_trunc('day', order_date)
+  ),
+  weekly_sales as (
+    select sku,
+      date_trunc('week', sale_date) as week_start,
+      sum(daily_qty) as weekly_qty
+    from daily_sales
+    group by sku, date_trunc('week', sale_date)
+  ),
+  burn_rates as (
+    select sku,
+      max(product_name) as product_name,
+      max(product_id)::bigint as product_id,
+      max(variation_id)::bigint as variation_id,
+      coalesce(sum(daily_qty) filter (where sale_date >= now() - interval '7 days'), 0) as sold_7d,
+      coalesce(sum(daily_qty) filter (where sale_date >= now() - interval '14 days'), 0) as sold_14d,
+      coalesce(sum(daily_qty) filter (where sale_date >= now() - interval '30 days'), 0) as sold_30d,
+      coalesce(sum(daily_qty) filter (where sale_date >= now() - interval '60 days'), 0) as sold_60d,
+      coalesce(sum(daily_qty) filter (where sale_date >= now() - interval '90 days'), 0) as sold_90d,
+      coalesce(sum(daily_qty) filter (where sale_date >= now() - interval '180 days'), 0) as sold_180d,
+      round(coalesce(sum(daily_qty) filter (where sale_date >= now() - interval '7 days'), 0) / 7.0, 2) as burn_7d,
+      round(coalesce(sum(daily_qty) filter (where sale_date >= now() - interval '14 days'), 0) / 14.0, 2) as burn_14d,
+      round(coalesce(sum(daily_qty) filter (where sale_date >= now() - interval '30 days'), 0) / 30.0, 2) as burn_30d,
+      round(coalesce(sum(daily_qty) filter (where sale_date >= now() - interval '60 days'), 0) / 60.0, 2) as burn_60d,
+      round(coalesce(sum(daily_qty) filter (where sale_date >= now() - interval '90 days'), 0) / 90.0, 2) as burn_90d,
+      round(coalesce(sum(daily_qty) filter (where sale_date >= now() - interval '180 days'), 0) / 180.0, 2) as burn_180d,
+      sum(daily_qty) as total_sold,
+      min(sale_date)::text as first_sale,
+      max(sale_date)::text as last_sale
+    from daily_sales
+    group by sku
+  ),
+  weekly_trends as (
+    select sku,
+      jsonb_agg(
+        jsonb_build_object('week', week_start::text, 'qty', weekly_qty)
+        order by week_start desc
+      ) filter (where week_start >= now() - interval '12 weeks') as recent_weeks
+    from weekly_sales
+    group by sku
+  )
+  select jsonb_agg(
+    to_jsonb(b) || jsonb_build_object('recent_weeks', coalesce(w.recent_weeks, '[]'::jsonb))
+  ) into result
+  from burn_rates b
+  left join weekly_trends w on b.sku = w.sku;
+  return coalesce(result, '[]'::jsonb);
+end; $$;
+
+-- ============================================================
 -- REALTIME
 -- ============================================================
 alter publication supabase_realtime add table orders;
@@ -203,6 +323,8 @@ alter publication supabase_realtime add table testing;
 alter publication supabase_realtime add table approved;
 alter publication supabase_realtime add table on_website;
 alter publication supabase_realtime add table audit_log;
+alter publication supabase_realtime add table sales_history;
+alter publication supabase_realtime add table vendor_lead_times;
 
 -- ============================================================
 -- SCHEDULED JOBS (pg_cron + pg_net)

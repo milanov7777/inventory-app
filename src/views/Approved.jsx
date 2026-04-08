@@ -45,7 +45,7 @@ const emptyForm = { batch_number: '', sku: '', compound_mg: '', qty_available: '
 export default function Approved({ user }) {
   const { approved, loading, error, addApproved, updateApproved, deleteApproved } = useApproved()
   const { onWebsite } = useOnWebsite()
-  const { orders } = useOrders()
+  const { orders, refetch } = useOrders()
   const [filters, setFilters] = useState({})
   const [panelMode, setPanelMode] = useState(null)
   const [selectedRow, setSelectedRow] = useState(null)
@@ -123,6 +123,7 @@ export default function Approved({ user }) {
       if (statusErr) throw new Error(statusErr.message)
       await logAction({ userName: user, actionType: 'promote', batchNumber: promoteForm.batch_number, stage: 'on_website', changes: { from: 'approved', to: 'on_website', ...payload } })
       notifySlack('listed_on_website', { batch_number: promoteForm.batch_number, user })
+      await refetch()
       setPanelMode(null)
     } catch (err) { setFormError(err.message) } finally { setSaving(false) }
   }

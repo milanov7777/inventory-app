@@ -46,7 +46,7 @@ const emptyForm = { sku: '', compound_mg: '', qty_received: '', batch_number: ''
 export default function Received({ user }) {
   const { received, loading, error, addReceived, updateReceived, deleteReceived } = useReceived()
   const { testing } = useTesting()
-  const { orders } = useOrders()
+  const { orders, refetch } = useOrders()
   const [filters, setFilters] = useState({})
   const [panelMode, setPanelMode] = useState(null)
   const [selectedRow, setSelectedRow] = useState(null)
@@ -124,6 +124,7 @@ export default function Received({ user }) {
       if (statusErr) throw new Error(statusErr.message)
       await logAction({ userName: user, actionType: 'promote', batchNumber: promoteForm.batch_number, stage: 'testing', changes: { from: 'received', to: 'testing', ...payload } })
       notifySlack('sent_to_testing', { batch_number: promoteForm.batch_number, user })
+      await refetch()
       setPanelMode(null)
     } catch (err) { setFormError(err.message) } finally { setSaving(false) }
   }

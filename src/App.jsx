@@ -9,6 +9,7 @@ import Testing from './views/Testing.jsx'
 import Approved from './views/Approved.jsx'
 import OnWebsite from './views/OnWebsite.jsx'
 import AuditLog from './views/AuditLog.jsx'
+import Forecasting from './views/Forecasting.jsx'
 import { useOrders } from './hooks/useOrders.js'
 import { useReceived } from './hooks/useReceived.js'
 import { useTesting } from './hooks/useTesting.js'
@@ -72,6 +73,7 @@ export default function App() {
     testing: <Testing user={user} />,
     approved: <Approved user={user} />,
     on_website: <OnWebsite user={user} />,
+    forecasting: <Forecasting user={user} />,
     audit_log: <AuditLog />,
   }
 

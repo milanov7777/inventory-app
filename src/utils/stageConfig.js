@@ -64,6 +64,16 @@ export const STAGES = [
     promoteLabel: null,
   },
   {
+    key: 'forecasting',
+    label: 'Forecasting',
+    color: 'bg-purple-500',
+    activeColor: 'bg-purple-700',
+    hoverColor: 'hover:bg-purple-600',
+    table: null,
+    nextStage: null,
+    promoteLabel: null,
+  },
+  {
     key: 'audit_log',
     label: 'Audit Log',
     color: 'bg-red-500',

@@ -39,7 +39,7 @@ const emptyForm = {
 }
 
 export default function Orders({ user }) {
-  const { orders, loading, error, addOrder, updateOrder, deleteOrder } = useOrders()
+  const { orders, loading, error, addOrder, updateOrder, deleteOrder, refetch } = useOrders()
   const { received } = useReceived()
   const [filters, setFilters] = useState({})
   const [panelMode, setPanelMode] = useState(null) // 'add' | 'edit' | 'promote'
@@ -179,6 +179,7 @@ export default function Orders({ user }) {
       if (statusErr) throw new Error(statusErr.message)
       await logAction({ userName: user, actionType: 'promote', batchNumber: promoteForm.batch_number, stage: 'received', changes: { from: 'orders', to: 'received', ...payload } })
       notifySlack('order_received', { batch_number: promoteForm.batch_number, user })
+      await refetch()
       setPanelMode(null)
     } catch (err) {
       setFormError(err.message)

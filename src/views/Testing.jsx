@@ -44,7 +44,7 @@ const emptyForm = { batch_number: '', sku: '', compound_mg: '', lab: '', vials_s
 export default function Testing({ user }) {
   const { testing, loading, error, addTesting, updateTesting, deleteTesting } = useTesting()
   const { approved } = useApproved()
-  const { orders } = useOrders()
+  const { orders, refetch } = useOrders()
   const [filters, setFilters] = useState({})
   const [panelMode, setPanelMode] = useState(null)
   const [selectedRow, setSelectedRow] = useState(null)
@@ -149,6 +149,7 @@ export default function Testing({ user }) {
         await updateTesting(selectedRow.id, payload, user, selectedRow.batch_number)
         if (payload.pass_fail === 'fail') {
           await supabase.from('orders').update({ status: 'failed' }).eq('batch_number', payload.batch_number)
+          await refetch()
         }
       }
       if (payload.pass_fail && payload.pass_fail !== selectedRow?.pass_fail) {
@@ -168,6 +169,7 @@ export default function Testing({ user }) {
       if (statusErr) throw new Error(statusErr.message)
       await logAction({ userName: user, actionType: 'promote', batchNumber: promoteForm.batch_number, stage: 'approved', changes: { from: 'testing', to: 'approved', ...payload } })
       notifySlack('batch_approved', { batch_number: promoteForm.batch_number, user })
+      await refetch()
       setPanelMode(null)
     } catch (err) { setFormError(err.message) } finally { setSaving(false) }
   }
