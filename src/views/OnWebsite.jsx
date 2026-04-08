@@ -78,7 +78,15 @@ export default function OnWebsite({ user }) {
       logged_by: '',
       notes: p.stock_status === 'instock' ? 'In Stock' : p.stock_status === 'outofstock' ? 'Out of Stock' : p.stock_status,
       _source: 'woocommerce',
-    })),
+    })).sort((a, b) => {
+      const pa = a.sku.match(/^([A-Za-z]+)-?(\d+)/)
+      const pb = b.sku.match(/^([A-Za-z]+)-?(\d+)/)
+      if (pa && pb) {
+        if (pa[1] !== pb[1]) return pa[1].localeCompare(pb[1])
+        return Number(pa[2]) - Number(pb[2])
+      }
+      return a.sku.localeCompare(b.sku)
+    }),
     [wooProducts]
   )
 
