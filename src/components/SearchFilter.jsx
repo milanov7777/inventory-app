@@ -44,7 +44,7 @@ export default function SearchFilter({ fields, onFilter }) {
                 value={values[field.key]}
                 onChange={(e) => handleChange(field.key, e.target.value)}
                 placeholder={field.placeholder || `Search by SKU or compound...`}
-                className="text-sm border border-gray-200 rounded-lg px-3 py-2.5 w-56 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="text-sm border border-gray-200 rounded-lg px-3 py-2.5 w-56 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
               />
             </div>
           )
@@ -56,7 +56,7 @@ export default function SearchFilter({ fields, onFilter }) {
               <select
                 value={values[field.key]}
                 onChange={(e) => handleChange(field.key, e.target.value)}
-                className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white"
               >
                 <option value="">All</option>
                 {(field.options || []).map((opt) => (
@@ -77,14 +77,14 @@ export default function SearchFilter({ fields, onFilter }) {
                   type="date"
                   value={values[field.key + '_from']}
                   onChange={(e) => handleChange(field.key + '_from', e.target.value)}
-                  className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 />
                 <span className="text-gray-400 text-xs">to</span>
                 <input
                   type="date"
                   value={values[field.key + '_to']}
                   onChange={(e) => handleChange(field.key + '_to', e.target.value)}
-                  className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 />
               </div>
             </div>

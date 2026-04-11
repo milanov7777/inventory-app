@@ -201,5 +201,31 @@ end; $$;
 alter publication supabase_realtime add table sales_history;
 alter publication supabase_realtime add table vendor_lead_times;
 
+-- 19. Users table for PIN authentication and roles
+create extension if not exists pgcrypto;
+
+create table if not exists users (
+  id         uuid primary key default uuid_generate_v4(),
+  username   text unique not null,
+  pin_hash   text not null,
+  role       text not null default 'viewer' check (role in ('admin', 'viewer')),
+  created_at timestamptz not null default now()
+);
+
+alter table users enable row level security;
+do $$ begin
+  create policy "allow all" on users for all using (true) with check (true);
+exception when duplicate_object then null;
+end $$;
+
+-- Seed initial users with placeholder PINs (change these!)
+-- Camila: 1234, Admin: 0000, Aiden: 5678, Peyton: 9012
+insert into users (username, pin_hash, role) values
+  ('Camila', encode(digest('1234', 'sha256'), 'hex'), 'admin'),
+  ('Admin',  encode(digest('0000', 'sha256'), 'hex'), 'admin'),
+  ('Aiden',  encode(digest('5678', 'sha256'), 'hex'), 'viewer'),
+  ('Peyton', encode(digest('9012', 'sha256'), 'hex'), 'viewer')
+on conflict (username) do nothing;
+
 -- Verify
 select 'Schema update complete' as status;

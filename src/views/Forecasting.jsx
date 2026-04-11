@@ -124,7 +124,7 @@ export default function Forecasting({ user }) {
             <button
               onClick={() => syncNow('initial')}
               disabled={syncing}
-              className="text-sm px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm disabled:opacity-50"
+              className="text-sm px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 shadow-sm disabled:opacity-50"
             >
               {syncing ? 'Loading...' : 'Load History'}
             </button>
@@ -264,7 +264,7 @@ export default function Forecasting({ user }) {
         <div className="border border-gray-200 rounded-xl p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-gray-700">Vendor Lead Times</h3>
-            <button onClick={() => { setLtForm({ vendor_name: '', sku: '', lead_time_days: '', is_domestic: false, notes: '' }); setLtError(null) }} className="text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+            <button onClick={() => { setLtForm({ vendor_name: '', sku: '', lead_time_days: '', is_domestic: false, notes: '' }); setLtError(null) }} className="text-xs px-3 py-1.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700">
               + Add Vendor
             </button>
           </div>
@@ -324,7 +324,7 @@ export default function Forecasting({ user }) {
               {ltError && <p className="text-xs text-red-600">{ltError}</p>}
               <div className="flex gap-2">
                 <button type="button" onClick={() => setLtForm(null)} className="px-4 py-2 text-xs bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Cancel</button>
-                <button type="submit" disabled={ltSaving} className="px-4 py-2 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                <button type="submit" disabled={ltSaving} className="px-4 py-2 text-xs bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">
                   {ltSaving ? 'Saving...' : ltForm.id ? 'Update' : 'Add'}
                 </button>
               </div>

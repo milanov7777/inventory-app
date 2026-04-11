@@ -17,10 +17,16 @@ import { useApproved } from './hooks/useApproved.js'
 import { useOnWebsite } from './hooks/useOnWebsite.js'
 import { useAuditLog } from './hooks/useAuditLog.js'
 
+function loadSession() {
+  try { return JSON.parse(localStorage.getItem('inv_session')) } catch { return null }
+}
+
 export default function App() {
-  const [user, setUser] = useState(() => localStorage.getItem('inv_user'))
+  const [session, setSession] = useState(loadSession)
   const [activeTab, setActiveTab] = useState('dashboard')
   const [showSwitchUser, setShowSwitchUser] = useState(false)
+
+  const user = session?.username || null
 
   // Load counts for tab badges
   const { orders } = useOrders()
@@ -52,48 +58,40 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  function handleSelectUser(name) {
-    localStorage.setItem('inv_user', name)
-    setUser(name)
+  function handleSelectUser(name, role) {
+    const sess = { username: name, role }
+    localStorage.setItem('inv_session', JSON.stringify(sess))
+    setSession(sess)
     setShowSwitchUser(false)
   }
 
   function handleSwitchUser() {
-    setShowSwitchUser(true)
+    localStorage.removeItem('inv_session')
+    setSession(null)
   }
 
-  if (!user) {
+  if (!session) {
     return <UserPicker onSelect={handleSelectUser} />
   }
 
   const views = {
-    dashboard: <Dashboard user={user} />,
-    orders: <Orders user={user} />,
-    received: <Received user={user} />,
-    testing: <Testing user={user} />,
-    approved: <Approved user={user} />,
-    on_website: <OnWebsite user={user} />,
+    dashboard: <Dashboard user={user} session={session} />,
+    orders: <Orders user={user} session={session} />,
+    received: <Received user={user} session={session} />,
+    testing: <Testing user={user} session={session} />,
+    approved: <Approved user={user} session={session} />,
+    on_website: <OnWebsite user={user} session={session} />,
     forecasting: <Forecasting user={user} />,
     audit_log: <AuditLog />,
   }
 
   return (
-    <div className="min-h-screen bg-[#f8f9fa]">
-      <NavBar user={user} onSwitch={handleSwitchUser} />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50/30 to-slate-100">
+      <NavBar user={user} role={session.role} onSwitch={handleSwitchUser} />
       <TabBar activeKey={activeTab} onChange={setActiveTab} counts={counts} />
       <main className="max-w-screen-2xl mx-auto px-4 py-6">
         {views[activeTab]}
       </main>
-
-      {/* Switch User Modal */}
-      {showSwitchUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShowSwitchUser(false)} />
-          <div className="relative">
-            <UserPicker onSelect={handleSelectUser} />
-          </div>
-        </div>
-      )}
     </div>
   )
 }

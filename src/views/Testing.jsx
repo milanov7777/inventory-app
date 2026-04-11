@@ -12,8 +12,9 @@ import { notifySlack } from '../utils/slackNotify.js'
 import { exportCsv } from '../utils/exportCsv.js'
 import { supabase } from '../lib/supabase.js'
 import { logAction } from '../utils/auditLogger.js'
+import { canAdd, canEdit, canDelete, canPromote, isAdmin } from '../utils/permissions.js'
 
-function ResultCell({ row, onQuickResult }) {
+function ResultCell({ row, onQuickResult, readOnly }) {
   const v = row.pass_fail
   if (v) {
     return (
@@ -21,6 +22,9 @@ function ResultCell({ row, onQuickResult }) {
         {v.toUpperCase()}
       </span>
     )
+  }
+  if (readOnly) {
+    return <span className="text-xs text-gray-400">Pending</span>
   }
   return (
     <div className="flex gap-1">
@@ -41,7 +45,7 @@ const filterFields = [
 
 const emptyForm = { batch_number: '', sku: '', compound_mg: '', lab: '', vials_sent: '', date_sent: toISODate(), date_results_received: '', pass_fail: '', coa_on_file: 'no', notes: '' }
 
-export default function Testing({ user }) {
+export default function Testing({ user, session }) {
   const { testing, loading, error, addTesting, updateTesting, deleteTesting } = useTesting()
   const { approved } = useApproved()
   const { orders, refetch } = useOrders()
@@ -133,7 +137,7 @@ export default function Testing({ user }) {
     { key: 'vials_sent', label: 'Vials' },
     { key: 'date_sent', label: 'Sent', render: (v) => formatDate(v) },
     { key: 'date_results_received', label: 'Results', render: (v) => formatDate(v) },
-    { key: 'pass_fail', label: 'Result', render: (_, row) => <ResultCell row={row} onQuickResult={handleQuickResult} /> },
+    { key: 'pass_fail', label: 'Result', render: (_, row) => <ResultCell row={row} onQuickResult={handleQuickResult} readOnly={!canEdit(session)} /> },
     { key: 'coa_on_file', label: 'COA', render: (v) => v ? v.toUpperCase() : '—' },
     { key: 'logged_by', label: 'By' },
     { key: 'status', label: 'Status', render: (_, row) => <Badge status={row._orderStatus} /> },
@@ -189,7 +193,7 @@ export default function Testing({ user }) {
   // Approve enabled if: pass OR user is Admin (manual override)
   const canApproveRow = (row) => {
     if (approvedBatches.has(row.batch_number)) return false
-    return row.pass_fail === 'pass' || user === 'Admin'
+    return row.pass_fail === 'pass' || isAdmin(session)
   }
 
   return (
@@ -198,13 +202,13 @@ export default function Testing({ user }) {
         <h2 className="text-2xl font-semibold text-gray-900">Testing</h2>
         <div className="flex gap-2">
           <button onClick={handleExport} className="text-sm px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 shadow-sm">Export CSV</button>
-          <button onClick={openAdd} className="text-sm px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 shadow-sm">+ Add Testing</button>
+          {canAdd(session) && <button onClick={openAdd} className="text-sm px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 shadow-sm">+ Add Testing</button>}
         </div>
       </div>
       <SearchFilter fields={filterFields} onFilter={setFilters} />
       {loading ? <div className="text-center py-12 text-gray-400">Loading...</div> : (
-        <Table columns={columns} rows={filtered} onEdit={openEdit} onDelete={(row) => setConfirmRow(row)}
-          onPromote={openPromote} promoteLabel="Approve" promotedLabel="Approved ✓"
+        <Table columns={columns} rows={filtered} onEdit={canEdit(session) ? openEdit : undefined} onDelete={canDelete(session) ? (row) => setConfirmRow(row) : undefined}
+          onPromote={canPromote(session) ? openPromote : undefined} promoteLabel="Approve" promotedLabel="Approved ✓"
           canPromote={canApproveRow}
           emptyMessage="No testing records yet." />
       )}
@@ -282,7 +286,7 @@ export default function Testing({ user }) {
   )
 }
 
-const ic = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500'
+const ic = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-500'
 function Field({ label, required, children }) {
   return <div className="flex flex-col gap-1.5"><label className="text-xs font-semibold text-gray-600">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>{children}</div>
 }

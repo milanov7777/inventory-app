@@ -2,9 +2,7 @@ import { useMemo } from 'react'
 import { useDashboard } from '../hooks/useDashboard.js'
 import { useOrders } from '../hooks/useOrders.js'
 import { useReceived } from '../hooks/useReceived.js'
-import { useTesting } from '../hooks/useTesting.js'
 import { useApproved } from '../hooks/useApproved.js'
-import { useOnWebsite } from '../hooks/useOnWebsite.js'
 import DashboardCard from '../components/DashboardCard.jsx'
 import AlertsPanel from '../components/AlertsPanel.jsx'
 import ActivityFeed from '../components/ActivityFeed.jsx'
@@ -12,24 +10,26 @@ import ActivityFeed from '../components/ActivityFeed.jsx'
 const fmtMoney = (v) =>
   `$${Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-export default function Dashboard({ user }) {
+export default function Dashboard({ user, session }) {
   const { stats, lowStock, thresholds, recentActivity, loading, updateThreshold } = useDashboard()
   const { orders } = useOrders()
   const { received } = useReceived()
-  const { testing } = useTesting()
   const { approved } = useApproved()
-  const { onWebsite } = useOnWebsite()
 
   const allSkus = useMemo(() => [...new Set(orders.map((o) => o.sku))].sort(), [orders])
 
-  // Pipeline counts
-  const pipelineCounts = useMemo(() => ({
-    ordered: orders.filter((o) => o.status === 'ordered').length,
-    received: received.length,
-    testing: testing.length,
-    approved: approved.length,
-    on_website: onWebsite.length,
-  }), [orders, received, testing, approved, onWebsite])
+  // Pipeline counts (based on orders.status — matches tab badge logic)
+  const pipelineCounts = useMemo(() => {
+    const statusCounts = {}
+    orders.forEach((o) => { statusCounts[o.status] = (statusCounts[o.status] || 0) + 1 })
+    return {
+      ordered: statusCounts['ordered'] || 0,
+      received: statusCounts['received'] || 0,
+      testing: statusCounts['in_testing'] || 0,
+      approved: statusCounts['approved'] || 0,
+      on_website: statusCounts['live'] || 0,
+    }
+  }, [orders])
 
   // SKU inventory summary for alerts panel
   const skuSummary = useMemo(() => {
@@ -66,7 +66,7 @@ export default function Dashboard({ user }) {
         <DashboardCard
           label="Unique SKUs"
           value={stats.uniqueSkus}
-          color="border-blue-500"
+          color="border-brand-500"
           sub="across all stages"
         />
         <DashboardCard
@@ -83,13 +83,13 @@ export default function Dashboard({ user }) {
         />
         <DashboardCard
           label="In Testing"
-          value={testing.length}
+          value={pipelineCounts.testing}
           color="border-amber-500"
           sub="batches at labs"
         />
         <DashboardCard
           label="Approved & Ready"
-          value={approved.length}
+          value={pipelineCounts.approved}
           color="border-teal-500"
           sub="not yet on website"
         />
@@ -124,6 +124,7 @@ export default function Dashboard({ user }) {
             onUpdateThreshold={updateThreshold}
             user={user}
             allSkus={allSkus}
+            session={session}
           />
 
           {/* SKU Inventory Summary */}

@@ -1,6 +1,6 @@
 import SkuThresholdForm from './SkuThresholdForm.jsx'
 
-export default function AlertsPanel({ lowStockItems, thresholds, onUpdateThreshold, user, allSkus }) {
+export default function AlertsPanel({ lowStockItems, thresholds, onUpdateThreshold, user, allSkus, session }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
       <div className="flex items-center justify-between mb-4">
@@ -41,7 +41,7 @@ export default function AlertsPanel({ lowStockItems, thresholds, onUpdateThresho
         </div>
       )}
 
-      {user === 'Admin' && (
+      {session?.role === 'admin' && (
         <SkuThresholdForm
           skus={allSkus}
           onSave={(sku, threshold) => onUpdateThreshold(sku, threshold, user)}

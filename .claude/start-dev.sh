@@ -1,3 +1,4 @@
 #!/bin/bash
 export PATH="/usr/local/bin:$PATH"
-cd "$(dirname "$0")/.." && npm run dev -- --port 5173
+cd /Users/camilalozano/Desktop/inventory-app
+exec npx vite --port 5173

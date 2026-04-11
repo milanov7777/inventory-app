@@ -11,6 +11,7 @@ import { exportCsv } from '../utils/exportCsv.js'
 import { notifySlack } from '../utils/slackNotify.js'
 import { supabase } from '../lib/supabase.js'
 import { logAction } from '../utils/auditLogger.js'
+import { canAdd, canEdit, canDelete, canPromote } from '../utils/permissions.js'
 
 const columns = [
   { key: 'batch_number', label: 'Batch #', sticky: true },
@@ -38,7 +39,7 @@ const emptyForm = {
   tracking_number: '', shipping_cost: '0', notes: '',
 }
 
-export default function Orders({ user }) {
+export default function Orders({ user, session }) {
   const { orders, loading, error, addOrder, updateOrder, deleteOrder, refetch } = useOrders()
   const { received } = useReceived()
   const [filters, setFilters] = useState({})
@@ -213,7 +214,7 @@ export default function Orders({ user }) {
         <h2 className="text-2xl font-semibold text-gray-900">Orders</h2>
         <div className="flex gap-2">
           <button onClick={handleExport} className="text-sm px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shadow-sm">Export CSV</button>
-          <button onClick={openAdd} className="text-sm px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm">+ Add Order</button>
+          {canAdd(session) && <button onClick={openAdd} className="text-sm px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors shadow-sm">+ Add Order</button>}
         </div>
       </div>
 
@@ -243,9 +244,9 @@ export default function Orders({ user }) {
         <Table
           columns={columns}
           rows={filtered}
-          onEdit={openEdit}
-          onDelete={(row) => setConfirmRow(row)}
-          onPromote={openPromote}
+          onEdit={canEdit(session) ? openEdit : undefined}
+          onDelete={canDelete(session) ? (row) => setConfirmRow(row) : undefined}
+          onPromote={canPromote(session) ? openPromote : undefined}
           promoteLabel="Mark Received"
           promotedLabel="Received ✓"
           canPromote={canPromoteRow}
@@ -304,7 +305,7 @@ export default function Orders({ user }) {
           {formError && <p className="text-sm text-red-600">{formError}</p>}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={() => setPanelMode(null)} className="flex-1 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
-            <button type="submit" disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+            <button type="submit" disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50">
               {saving ? 'Saving…' : panelMode === 'add' ? 'Add Order' : 'Save Changes'}
             </button>
           </div>
@@ -370,7 +371,7 @@ export default function Orders({ user }) {
   )
 }
 
-const inputCls = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+const inputCls = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent'
 
 function Field({ label, required, children }) {
   return (

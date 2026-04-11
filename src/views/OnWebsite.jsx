@@ -8,6 +8,7 @@ import SlidePanel from '../components/SlidePanel.jsx'
 import ConfirmDialog from '../components/ConfirmDialog.jsx'
 import { formatDate, toISODate } from '../utils/formatDate.js'
 import { exportCsv } from '../utils/exportCsv.js'
+import { canAdd, canEdit, canDelete } from '../utils/permissions.js'
 
 const columns = [
   { key: 'source_badge', label: '', render: (_, row) => row._source === 'woocommerce' ? (
@@ -34,7 +35,7 @@ const filterFields = [
 
 const emptyForm = { batch_number: '', sku: '', compound_mg: '', qty_listed: '', date_listed: toISODate(), price_listed: '', notes: '' }
 
-export default function OnWebsite({ user }) {
+export default function OnWebsite({ user, session }) {
   const { onWebsite, loading, error, addOnWebsite, updateOnWebsite, deleteOnWebsite } = useOnWebsite()
   const { orders } = useOrders()
   const { wooProducts, wooLoading, refetchWoo } = useWooProducts()
@@ -157,12 +158,12 @@ export default function OnWebsite({ user }) {
             {wooLoading ? 'Syncing…' : 'Sync WooCommerce'}
           </button>
           <button onClick={handleExport} className="text-sm px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 shadow-sm">Export CSV</button>
-          <button onClick={openAdd} className="text-sm px-4 py-2 bg-lime-600 text-white rounded-lg hover:bg-lime-700 shadow-sm">+ Add Listing</button>
+          {canAdd(session) && <button onClick={openAdd} className="text-sm px-4 py-2 bg-lime-600 text-white rounded-lg hover:bg-lime-700 shadow-sm">+ Add Listing</button>}
         </div>
       </div>
       <SearchFilter fields={filterFields} onFilter={setFilters} />
       {loading ? <div className="text-center py-12 text-gray-400">Loading…</div> : (
-        <Table columns={columns} rows={filtered} onEdit={openEdit} onDelete={handleDeleteClick} emptyMessage="No live listings yet." />
+        <Table columns={columns} rows={filtered} onEdit={canEdit(session) ? openEdit : undefined} onDelete={canDelete(session) ? handleDeleteClick : undefined} emptyMessage="No live listings yet." />
       )}
 
       <SlidePanel isOpen={panelMode === 'add' || panelMode === 'edit'} onClose={() => setPanelMode(null)} title={panelMode === 'add' ? 'New Listing' : 'Edit Listing'}>
@@ -189,7 +190,7 @@ export default function OnWebsite({ user }) {
   )
 }
 
-const ic = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
+const ic = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500'
 function Field({ label, required, children }) {
   return <div className="flex flex-col gap-1"><label className="text-xs font-medium text-gray-600">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>{children}</div>
 }

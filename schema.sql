@@ -6,6 +6,7 @@
 
 -- EXTENSIONS
 create extension if not exists "uuid-ossp";
+create extension if not exists pgcrypto;
 
 -- ============================================================
 -- ENUM TYPES
@@ -19,6 +20,17 @@ create type storage_location as enum ('fridge', 'shelf');
 create type pass_fail_result as enum ('pass', 'fail');
 
 create type coa_status as enum ('yes', 'no');
+
+-- ============================================================
+-- TABLE: users  (PIN authentication + roles)
+-- ============================================================
+create table users (
+  id         uuid primary key default uuid_generate_v4(),
+  username   text unique not null,
+  pin_hash   text not null,
+  role       text not null default 'viewer' check (role in ('admin', 'viewer')),
+  created_at timestamptz not null default now()
+);
 
 -- ============================================================
 -- TABLE: orders  (Stage 1)
@@ -166,6 +178,7 @@ create index idx_audit_log_user      on audit_log(user_name);
 -- ============================================================
 -- ROW LEVEL SECURITY — permissive (anon key, no password auth)
 -- ============================================================
+alter table users           enable row level security;
 alter table orders         enable row level security;
 alter table received       enable row level security;
 alter table testing        enable row level security;
@@ -174,6 +187,7 @@ alter table on_website     enable row level security;
 alter table audit_log      enable row level security;
 alter table sku_thresholds enable row level security;
 
+create policy "allow all" on users           for all using (true) with check (true);
 create policy "allow all" on orders         for all using (true) with check (true);
 create policy "allow all" on received       for all using (true) with check (true);
 create policy "allow all" on testing        for all using (true) with check (true);

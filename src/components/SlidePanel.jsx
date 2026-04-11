@@ -20,7 +20,7 @@ export default function SlidePanel({ isOpen, onClose, title, children }) {
         />
       )}
       <div
-        className={`fixed top-0 right-0 h-full w-full max-w-lg z-40 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${
+        className={`fixed top-0 right-0 h-full w-full max-w-lg z-40 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col border-t-2 border-brand-500 ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >

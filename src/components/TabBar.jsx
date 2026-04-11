@@ -13,7 +13,7 @@ export default function TabBar({ activeKey, onChange, counts = {} }) {
               onClick={() => onChange(stage.key)}
               className={`px-5 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
                 isActive
-                  ? 'border-blue-600 text-blue-700 bg-blue-50'
+                  ? 'border-brand-600 text-brand-700 bg-brand-50'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
               }`}
             >
@@ -21,7 +21,7 @@ export default function TabBar({ activeKey, onChange, counts = {} }) {
               {stage.label}
               {count != null && count > 0 && (
                 <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${
-                  isActive ? 'bg-blue-200 text-blue-800' : 'bg-gray-200 text-gray-600'
+                  isActive ? 'bg-brand-200 text-brand-800' : 'bg-gray-200 text-gray-600'
                 }`}>
                   {count}
                 </span>

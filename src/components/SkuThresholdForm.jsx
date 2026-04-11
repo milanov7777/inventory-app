@@ -29,7 +29,7 @@ export default function SkuThresholdForm({ skus, onSave }) {
         <select
           value={sku}
           onChange={(e) => setSku(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white min-w-40"
+          className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white min-w-40"
         >
           <option value="">Select SKU</option>
           {skus.map((s) => (
@@ -47,13 +47,13 @@ export default function SkuThresholdForm({ skus, onSave }) {
           value={threshold}
           onChange={(e) => setThreshold(e.target.value)}
           placeholder="e.g. 50"
-          className="text-sm border border-gray-200 rounded-lg px-3 py-2 w-36 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="text-sm border border-gray-200 rounded-lg px-3 py-2 w-36 focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
       </div>
       <button
         type="submit"
         disabled={!sku || threshold === '' || saving}
-        className="text-sm px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="text-sm px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
         {saving ? 'Saving…' : 'Set Threshold'}
       </button>

@@ -76,7 +76,7 @@ export default function Table({
                 >
                   {col.label}
                   {sortKey === col.key && (
-                    <span className="ml-1 text-blue-500">{sortDir === 'asc' ? '▲' : '▼'}</span>
+                    <span className="ml-1 text-brand-500">{sortDir === 'asc' ? '▲' : '▼'}</span>
                   )}
                 </th>
               ))}
@@ -100,7 +100,7 @@ export default function Table({
                     ? customClass
                     : isHighlighted
                       ? 'bg-amber-50 border-l-[3px] border-amber-400'
-                      : `${i % 2 === 1 ? 'bg-gray-50' : 'bg-white'} border-l-2 border-transparent hover:border-blue-400`
+                      : `${i % 2 === 1 ? 'bg-gray-50' : 'bg-white'} border-l-2 border-transparent hover:border-brand-400`
                 } hover:brightness-95 transition-colors ${
                   onRowClick ? 'cursor-pointer' : ''
                 }`}
@@ -150,7 +150,7 @@ export default function Table({
                             title={enabled ? promoteLabel : (promotedLabel || 'Already promoted')}
                             className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors ${
                               enabled
-                                ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm'
+                                ? 'bg-brand-600 text-white hover:bg-brand-700 shadow-sm'
                                 : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                             }`}
                           >
@@ -162,7 +162,7 @@ export default function Table({
                         <button
                           onClick={() => onEdit(row)}
                           title="Edit"
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
                         >
                           <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
                             <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
@@ -217,7 +217,7 @@ export default function Table({
                       onClick={(e) => { e.stopPropagation(); enabled && onPromote(row) }}
                       disabled={!enabled}
                       className={`flex-1 text-xs py-2 rounded-lg font-semibold ${
-                        enabled ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-400'
+                        enabled ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-400'
                       }`}
                     >
                       {enabled ? `${promoteLabel} →` : (promotedLabel || `${promoteLabel} ✓`)}
@@ -225,7 +225,7 @@ export default function Table({
                   )
                 })()}
                 {onEdit && (
-                  <button onClick={(e) => { e.stopPropagation(); onEdit(row) }} className="px-3 py-2 text-xs rounded-lg bg-blue-50 text-blue-700">Edit</button>
+                  <button onClick={(e) => { e.stopPropagation(); onEdit(row) }} className="px-3 py-2 text-xs rounded-lg bg-brand-50 text-brand-700">Edit</button>
                 )}
                 {onDelete && (
                   <button onClick={(e) => { e.stopPropagation(); onDelete(row) }} className="px-3 py-2 text-xs rounded-lg bg-red-50 text-red-700">Delete</button>

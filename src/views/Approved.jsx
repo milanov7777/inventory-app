@@ -12,6 +12,7 @@ import { notifySlack } from '../utils/slackNotify.js'
 import { exportCsv } from '../utils/exportCsv.js'
 import { supabase } from '../lib/supabase.js'
 import { logAction } from '../utils/auditLogger.js'
+import { canAdd, canEdit, canDelete, canPromote } from '../utils/permissions.js'
 
 const columns = [
   { key: 'batch_number', label: 'Batch #', sticky: true },
@@ -42,7 +43,7 @@ const filterFields = [
 
 const emptyForm = { batch_number: '', sku: '', compound_mg: '', qty_available: '', approved_date: toISODate(), storage: 'shelf', notes: '' }
 
-export default function Approved({ user }) {
+export default function Approved({ user, session }) {
   const { approved, loading, error, addApproved, updateApproved, deleteApproved } = useApproved()
   const { onWebsite } = useOnWebsite()
   const { orders, refetch } = useOrders()
@@ -146,13 +147,13 @@ export default function Approved({ user }) {
         <h2 className="text-2xl font-semibold text-gray-900">Approved & Ready</h2>
         <div className="flex gap-2">
           <button onClick={handleExport} className="text-sm px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 shadow-sm">Export CSV</button>
-          <button onClick={openAdd} className="text-sm px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 shadow-sm">+ Add Approved</button>
+          {canAdd(session) && <button onClick={openAdd} className="text-sm px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 shadow-sm">+ Add Approved</button>}
         </div>
       </div>
       <SearchFilter fields={filterFields} onFilter={setFilters} />
       {loading ? <div className="text-center py-12 text-gray-400">Loading…</div> : (
-        <Table columns={columns} rows={filtered} onEdit={openEdit} onDelete={(row) => setConfirmRow(row)}
-          onPromote={openPromote} promoteLabel="List on Website" promotedLabel="Listed ✓"
+        <Table columns={columns} rows={filtered} onEdit={canEdit(session) ? openEdit : undefined} onDelete={canDelete(session) ? (row) => setConfirmRow(row) : undefined}
+          onPromote={canPromote(session) ? openPromote : undefined} promoteLabel="List on Website" promotedLabel="Listed ✓"
           canPromote={(row) => !websiteBatches.has(row.batch_number)}
           emptyMessage="No approved batches yet." />
       )}
@@ -206,7 +207,7 @@ export default function Approved({ user }) {
   )
 }
 
-const ic = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500'
+const ic = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500'
 function Field({ label, required, children }) {
   return <div className="flex flex-col gap-1"><label className="text-xs font-medium text-gray-600">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>{children}</div>
 }

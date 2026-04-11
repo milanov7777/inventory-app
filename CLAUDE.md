@@ -5,7 +5,7 @@
 - **App**: Inventory Tracker — 5-stage pipeline: Orders > Received > Testing > Approved > On Website
 - **Stack**: React 18 + Vite 5 + Tailwind CSS 3 + Supabase JS v2
 - **Not used**: TypeScript, React Router, component library, test framework
-- **Users**: Camila, Aiden, Peyton, Admin (localStorage name picker, no passwords)
+- **Users**: Camila (admin), Admin (admin), Aiden (viewer), Peyton (viewer) — PIN login, roles stored in `users` table
 - **Supabase project ref**: `uxjgqwaeruustwnxplyy`
 
 ---
@@ -32,7 +32,7 @@
 
 ## Database Schema Quick Reference
 
-**7 tables**: `orders`, `received`, `testing`, `approved`, `on_website`, `audit_log`, `sku_thresholds`
+**8 tables**: `users`, `orders`, `received`, `testing`, `approved`, `on_website`, `audit_log`, `sku_thresholds`
 **1 view**: `sku_qty_summary` (aggregates `approved.qty_available` by SKU)
 
 **Enums**:
@@ -142,7 +142,7 @@ Before every deploy, verify locally:
 | Add a new table | `.claude/workflows.md` — Workflow B |
 | First-time deploy to Vercel | `.claude/workflows.md` — Workflow C |
 | Update and redeploy | `.claude/workflows.md` — Workflow D |
-| Add a new user | Edit `USERS` array in `src/utils/stageConfig.js` |
+| Add a new user | Add to `USERS` array in `src/utils/stageConfig.js` AND insert into `users` table in Supabase |
 | Change stage colors or promote rules | Edit `STAGES` array in `src/utils/stageConfig.js` |
 | Run seed data | `npm run seed` (requires `SUPABASE_SERVICE_KEY` in `.env`) |
 | Supabase Dashboard | https://supabase.com/dashboard/project/uxjgqwaeruustwnxplyy |
