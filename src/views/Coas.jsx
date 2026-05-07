@@ -191,16 +191,15 @@ export default function Coas() {
       },
     },
     {
-      key: 'retest',
-      label: 'Retest?',
+      key: 'time_up',
+      label: 'Time Up',
       render: (_, row) => {
         if (!row.on_website) return <span className="text-gray-400 text-xs">—</span>
         const days = row.days_since_tested ?? 0
         if (days >= RETEST_DAYS) {
-          return <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-800 border border-red-300">⚠️ DUE — {fmtAge(days)} old</span>
+          return <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-800 border border-red-300">⚠️ Up {fmtAge(days)} — retest due</span>
         }
-        const daysLeft = RETEST_DAYS - days
-        return <span className="text-xs text-gray-500">{fmtAge(daysLeft)} left</span>
+        return <span className="text-xs text-gray-700 font-medium">Up {fmtAge(days)}</span>
       },
     },
   ]
