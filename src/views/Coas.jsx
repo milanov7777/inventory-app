@@ -43,7 +43,7 @@ function NoteBadge({ type, text }) {
 export default function Coas() {
   const { rows, allCoas, loading, error } = useCoaTracking()
   const { wooProducts, wooLoading } = useWooProducts()
-  const [viewMode, setViewMode] = useState('all') // 'all' | 'by_sku'
+  const [viewMode, setViewMode] = useState('by_sku') // 'all' | 'by_sku'
   const [filter, setFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [websiteFilter, setWebsiteFilter] = useState('all') // 'all' | 'live' | 'not_live' | 'retest_due'
@@ -58,12 +58,34 @@ export default function Coas() {
   }, [wooProducts])
 
   // Annotate every COA with whether its SKU is live on WC
+  // Then add synthetic rows for WC products that don't have any COA yet
   const annotatedCoas = useMemo(() => {
-    return allCoas.map((c) => {
+    const annotated = allCoas.map((c) => {
       const isOnWebsite = c.sku && liveSkus.has(c.sku.toUpperCase())
-      return { ...c, on_website: isOnWebsite }
+      return { ...c, on_website: isOnWebsite, _no_coa: false }
     })
-  }, [allCoas, liveSkus])
+
+    // Find WC SKUs that have NO COA in our records
+    const skusWithCoa = new Set(annotated.map((c) => (c.sku || '').toUpperCase()).filter(Boolean))
+    const missingRows = []
+    for (const p of wooProducts || []) {
+      const skuKey = (p.sku || '').toUpperCase()
+      if (!skuKey || skusWithCoa.has(skuKey)) continue
+      missingRows.push({
+        id: `woo-${p.woo_id || p.sku}`,
+        sku: p.sku,
+        compound: p.name,
+        batch_number: null,
+        lab: null,
+        date_tested: null,
+        pass_fail: null,
+        days_since_tested: null,
+        on_website: p.stock_status === 'instock',
+        _no_coa: true,
+      })
+    }
+    return [...annotated, ...missingRows]
+  }, [allCoas, liveSkus, wooProducts])
 
   // ---- BY SKU mode (existing) ----
   const enrichedSku = useMemo(() => {
@@ -87,6 +109,12 @@ export default function Coas() {
         )
       )
     }
+    // Sort: never tested first, then oldest test date first (most overdue at top)
+    out = [...out].sort((a, b) => {
+      const aAge = a._ageDays ?? 99999
+      const bAge = b._ageDays ?? 99999
+      return bAge - aAge
+    })
     return out
   }, [enrichedSku, filter, statusFilter])
 
@@ -100,23 +128,53 @@ export default function Coas() {
     {
       key: 'last_tested',
       label: 'Last Tested',
-      render: (v, row) => {
-        if (!v) return <span className="text-red-700 font-bold">Never tested</span>
+      render: (v) => {
+        if (!v) return <span className="text-gray-400 text-xs">—</span>
+        return <span className="text-xs text-gray-700">{fmtDate(v)}</span>
+      },
+    },
+    {
+      key: '_ageDays',
+      label: 'Time Since Test',
+      render: (v) => {
+        if (v == null) {
+          return (
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold border bg-red-100 text-red-800 border-red-300">
+              ⚠️ Never tested
+            </span>
+          )
+        }
+        if (v >= 180) {
+          return (
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold border bg-red-100 text-red-800 border-red-300">
+              🔴 {fmtAge(v)} ago — retest!
+            </span>
+          )
+        }
+        if (v >= 120) {
+          return (
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold border bg-orange-100 text-orange-800 border-orange-300">
+              🟠 {fmtAge(v)} ago
+            </span>
+          )
+        }
+        if (v >= 90) {
+          return (
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold border bg-yellow-100 text-yellow-800 border-yellow-300">
+              🟡 {fmtAge(v)} ago
+            </span>
+          )
+        }
         return (
-          <span className={row._isStale ? 'text-red-700 font-bold' : ''}>
-            {fmtDate(v)}
-            {row._ageDays != null && (
-              <span className={`ml-2 text-xs ${row._isStale ? 'text-red-600' : 'text-gray-400'}`}>
-                ({row._ageDays}d ago)
-              </span>
-            )}
+          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold border bg-green-100 text-green-800 border-green-300">
+            🟢 {fmtAge(v)} ago
           </span>
         )
       },
     },
     {
       key: 'last_tested_batch',
-      label: 'Tested Batch',
+      label: 'Batch Tested',
       render: (v, row) => v ? (
         <span className="text-xs">
           <span className="font-mono">{v}</span>
@@ -126,12 +184,12 @@ export default function Coas() {
     },
     {
       key: 'current_batch',
-      label: 'Current Batch (Live)',
+      label: 'Live Batch',
       render: (v) => v ? <span className="font-mono text-xs">{v}</span> : <span className="text-gray-400">—</span>,
     },
     {
       key: 'notes',
-      label: 'Status / Notes',
+      label: 'Status',
       render: (v, row) => <NoteBadge type={row.note_type} text={v} />,
     },
   ]
@@ -141,7 +199,8 @@ export default function Coas() {
     let out = annotatedCoas
     if (websiteFilter === 'live') out = out.filter((r) => r.on_website)
     else if (websiteFilter === 'not_live') out = out.filter((r) => !r.on_website)
-    else if (websiteFilter === 'retest_due') out = out.filter((r) => r.on_website && (r.days_since_tested ?? 0) >= RETEST_DAYS)
+    else if (websiteFilter === 'retest_due') out = out.filter((r) => r.on_website && !r._no_coa && (r.days_since_tested ?? 0) >= RETEST_DAYS)
+    else if (websiteFilter === 'missing_coa') out = out.filter((r) => r.on_website && r._no_coa)
     const f = filter.trim().toLowerCase()
     if (f) {
       out = out.filter((r) =>
@@ -150,16 +209,30 @@ export default function Coas() {
         )
       )
     }
+    // Sort: live + missing COA first (urgent), then live + retest due, then by COA date desc, then non-live
+    out = [...out].sort((a, b) => {
+      const urgA = a.on_website && a._no_coa ? 0 : a.on_website && (a.days_since_tested ?? 0) >= RETEST_DAYS ? 1 : a.on_website ? 2 : 3
+      const urgB = b.on_website && b._no_coa ? 0 : b.on_website && (b.days_since_tested ?? 0) >= RETEST_DAYS ? 1 : b.on_website ? 2 : 3
+      if (urgA !== urgB) return urgA - urgB
+      return (b.date_tested || '').localeCompare(a.date_tested || '')
+    })
     return out
   }, [annotatedCoas, filter, websiteFilter])
 
   const liveCount = annotatedCoas.filter((r) => r.on_website).length
-  const retestDueCount = annotatedCoas.filter((r) => r.on_website && (r.days_since_tested ?? 0) >= RETEST_DAYS).length
+  const retestDueCount = annotatedCoas.filter((r) => r.on_website && !r._no_coa && (r.days_since_tested ?? 0) >= RETEST_DAYS).length
+  const missingCoaCount = annotatedCoas.filter((r) => r.on_website && r._no_coa).length
 
   const allColumns = [
     { key: 'sku', label: 'SKU', bold: true, sticky: true },
     { key: 'compound', label: 'Product', render: (v) => v || '—' },
-    { key: 'batch_number', label: 'Batch #', render: (v) => <span className="font-mono text-xs">{v}</span> },
+    {
+      key: 'batch_number',
+      label: 'Batch #',
+      render: (v, row) => row._no_coa
+        ? <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-300">No COA on file</span>
+        : <span className="font-mono text-xs">{v}</span>,
+    },
     { key: 'lab', label: 'Lab', render: (v) => v || '—' },
     {
       key: 'date_tested',
@@ -174,11 +247,14 @@ export default function Coas() {
     {
       key: 'pass_fail',
       label: 'Result',
-      render: (v) => v ? (
-        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${v === 'pass' ? 'bg-green-200 text-green-900' : 'bg-red-200 text-red-900'}`}>
-          {v.toUpperCase()}
-        </span>
-      ) : <span className="text-gray-400 text-xs">Pending</span>,
+      render: (v, row) => {
+        if (row._no_coa) return <span className="text-gray-400">—</span>
+        return v ? (
+          <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${v === 'pass' ? 'bg-green-200 text-green-900' : 'bg-red-200 text-red-900'}`}>
+            {v.toUpperCase()}
+          </span>
+        ) : <span className="text-gray-400 text-xs">Pending</span>
+      },
     },
     {
       key: 'on_website',
@@ -252,6 +328,15 @@ export default function Coas() {
               {liveCount} live now
             </button>
             <button
+              onClick={() => setWebsiteFilter(websiteFilter === 'missing_coa' ? 'all' : 'missing_coa')}
+              disabled={missingCoaCount === 0}
+              className={`px-3 py-1.5 rounded-md text-sm font-semibold border disabled:opacity-40 ${
+                websiteFilter === 'missing_coa' ? 'bg-amber-600 text-white border-amber-600' : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+              }`}
+            >
+              {missingCoaCount} no COA on file
+            </button>
+            <button
               onClick={() => setWebsiteFilter(websiteFilter === 'retest_due' ? 'all' : 'retest_due')}
               disabled={retestDueCount === 0}
               className={`px-3 py-1.5 rounded-md text-sm font-semibold border disabled:opacity-40 ${
@@ -321,11 +406,12 @@ export default function Coas() {
           columns={allColumns}
           rows={filteredAll}
           rowClassName={(row) => {
+            if (row._no_coa && row.on_website) return 'bg-amber-50'
             if (row.on_website && (row.days_since_tested ?? 0) >= RETEST_DAYS) return 'bg-red-50'
             if (row.on_website) return 'bg-green-50'
             return ''
           }}
-          emptyMessage={allCoas.length === 0 ? 'No COAs on file yet.' : 'No COAs match your filters.'}
+          emptyMessage={annotatedCoas.length === 0 ? 'No products yet.' : 'No products match your filters.'}
         />
       ) : (
         <Table
