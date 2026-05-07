@@ -5,13 +5,6 @@ import Table from '../components/Table.jsx'
 
 const RETEST_DAYS = 180 // 6 months — flag COAs older than this for retesting
 
-function daysAgo(dateStr) {
-  if (!dateStr) return null
-  const d = new Date(dateStr + (dateStr.includes('T') ? '' : 'T12:00:00'))
-  if (isNaN(d.getTime())) return null
-  return Math.floor((Date.now() - d.getTime()) / (24 * 60 * 60 * 1000))
-}
-
 function fmtDate(dateStr) {
   if (!dateStr) return null
   const d = new Date(dateStr + (dateStr.includes('T') ? '' : 'T12:00:00'))
@@ -26,27 +19,11 @@ function fmtAge(days) {
   return `${(days / 365).toFixed(1)}y`
 }
 
-function NoteBadge({ type, text }) {
-  const styles = {
-    swap: 'bg-amber-100 text-amber-900 border-amber-300',
-    in_progress: 'bg-blue-50 text-blue-800 border-blue-200',
-    warning: 'bg-red-100 text-red-800 border-red-300',
-    info: 'bg-gray-100 text-gray-700 border-gray-200',
-  }
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-md border text-xs font-medium ${styles[type] || styles.info}`}>
-      {text}
-    </span>
-  )
-}
-
 export default function Coas() {
-  const { rows, allCoas, loading, error } = useCoaTracking()
-  const { wooProducts, wooLoading } = useWooProducts()
-  const [viewMode, setViewMode] = useState('by_sku') // 'all' | 'by_sku'
+  const { allCoas, loading, error } = useCoaTracking()
+  const { wooProducts } = useWooProducts()
   const [filter, setFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [websiteFilter, setWebsiteFilter] = useState('all') // 'all' | 'live' | 'not_live' | 'retest_due'
+  const [websiteFilter, setWebsiteFilter] = useState('all') // 'all' | 'live' | 'not_live' | 'retest_due' | 'missing_coa'
 
   // Build a Set of SKUs that are currently live on WooCommerce (instock)
   const liveSkus = useMemo(() => {
@@ -87,114 +64,6 @@ export default function Coas() {
     return [...annotated, ...missingRows]
   }, [allCoas, liveSkus, wooProducts])
 
-  // ---- BY SKU mode (existing) ----
-  const enrichedSku = useMemo(() => {
-    return rows.map((r) => {
-      const age = daysAgo(r.last_tested)
-      const isStale = r.last_tested == null || (age != null && age > 60)
-      return { ...r, _ageDays: age, _isStale: isStale }
-    })
-  }, [rows])
-
-  const filteredSku = useMemo(() => {
-    let out = enrichedSku
-    if (statusFilter === 'stale') out = out.filter((r) => r._isStale)
-    else if (statusFilter === 'swap') out = out.filter((r) => r.note_type === 'swap')
-    else if (statusFilter === 'no_next') out = out.filter((r) => r.note_type === 'warning')
-    const f = filter.trim().toLowerCase()
-    if (f) {
-      out = out.filter((r) =>
-        [r.sku, r.compound, r.current_batch, r.next_batch, r.last_tested_batch].some((v) =>
-          (v || '').toLowerCase().includes(f)
-        )
-      )
-    }
-    // Sort: never tested first, then oldest test date first (most overdue at top)
-    out = [...out].sort((a, b) => {
-      const aAge = a._ageDays ?? 99999
-      const bAge = b._ageDays ?? 99999
-      return bAge - aAge
-    })
-    return out
-  }, [enrichedSku, filter, statusFilter])
-
-  const staleCount = enrichedSku.filter((r) => r._isStale).length
-  const swapCount = enrichedSku.filter((r) => r.note_type === 'swap').length
-  const noNextCount = enrichedSku.filter((r) => r.note_type === 'warning').length
-
-  const skuColumns = [
-    { key: 'sku', label: 'SKU', bold: true, sticky: true },
-    { key: 'compound', label: 'Product', render: (v) => v || '—' },
-    {
-      key: 'last_tested',
-      label: 'Last Tested',
-      render: (v) => {
-        if (!v) return <span className="text-gray-400 text-xs">—</span>
-        return <span className="text-xs text-gray-700">{fmtDate(v)}</span>
-      },
-    },
-    {
-      key: '_ageDays',
-      label: 'Time Since Test',
-      render: (v) => {
-        if (v == null) {
-          return (
-            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold border bg-red-100 text-red-800 border-red-300">
-              ⚠️ Never tested
-            </span>
-          )
-        }
-        if (v >= 180) {
-          return (
-            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold border bg-red-100 text-red-800 border-red-300">
-              🔴 {fmtAge(v)} ago — retest!
-            </span>
-          )
-        }
-        if (v >= 120) {
-          return (
-            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold border bg-orange-100 text-orange-800 border-orange-300">
-              🟠 {fmtAge(v)} ago
-            </span>
-          )
-        }
-        if (v >= 90) {
-          return (
-            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold border bg-yellow-100 text-yellow-800 border-yellow-300">
-              🟡 {fmtAge(v)} ago
-            </span>
-          )
-        }
-        return (
-          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold border bg-green-100 text-green-800 border-green-300">
-            🟢 {fmtAge(v)} ago
-          </span>
-        )
-      },
-    },
-    {
-      key: 'last_tested_batch',
-      label: 'Batch Tested',
-      render: (v, row) => v ? (
-        <span className="text-xs">
-          <span className="font-mono">{v}</span>
-          {row.last_tested_lab && <span className="text-gray-400 ml-1">({row.last_tested_lab})</span>}
-        </span>
-      ) : <span className="text-gray-400">—</span>,
-    },
-    {
-      key: 'current_batch',
-      label: 'Live Batch',
-      render: (v) => v ? <span className="font-mono text-xs">{v}</span> : <span className="text-gray-400">—</span>,
-    },
-    {
-      key: 'notes',
-      label: 'Status',
-      render: (v, row) => <NoteBadge type={row.note_type} text={v} />,
-    },
-  ]
-
-  // ---- ALL COAs mode (new) ----
   const filteredAll = useMemo(() => {
     let out = annotatedCoas
     if (websiteFilter === 'live') out = out.filter((r) => r.on_website)
@@ -209,10 +78,10 @@ export default function Coas() {
         )
       )
     }
-    // Sort: live + missing COA first (urgent), then live + retest due, then by COA date desc, then non-live
+    // Sort: retest due first, then live + has COA, then not live + has COA, then no COA at bottom
     out = [...out].sort((a, b) => {
-      const urgA = a.on_website && a._no_coa ? 0 : a.on_website && (a.days_since_tested ?? 0) >= RETEST_DAYS ? 1 : a.on_website ? 2 : 3
-      const urgB = b.on_website && b._no_coa ? 0 : b.on_website && (b.days_since_tested ?? 0) >= RETEST_DAYS ? 1 : b.on_website ? 2 : 3
+      const urgA = a._no_coa ? 3 : a.on_website && (a.days_since_tested ?? 0) >= RETEST_DAYS ? 0 : a.on_website ? 1 : 2
+      const urgB = b._no_coa ? 3 : b.on_website && (b.days_since_tested ?? 0) >= RETEST_DAYS ? 0 : b.on_website ? 1 : 2
       if (urgA !== urgB) return urgA - urgB
       return (b.date_tested || '').localeCompare(a.date_tested || '')
     })
@@ -283,108 +152,48 @@ export default function Coas() {
   // ---- Render ----
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">COAs</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {viewMode === 'all'
-              ? 'Every batch with a COA on file. Live = currently listed on the website.'
-              : 'Per-SKU summary: last tested date, current live batch, next batch in pipeline.'}
-          </p>
-        </div>
-
-        {/* View toggle */}
-        <div className="inline-flex bg-gray-100 rounded-lg p-1 border border-gray-200">
-          <button
-            onClick={() => setViewMode('all')}
-            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              viewMode === 'all' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            All COAs
-          </button>
-          <button
-            onClick={() => setViewMode('by_sku')}
-            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              viewMode === 'by_sku' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            By SKU
-          </button>
-        </div>
+      <div className="mb-4">
+        <h1 className="text-2xl font-bold text-gray-900">COAs</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Every batch with a COA on file. Live = currently listed on the website.</p>
       </div>
 
       {/* Filter chips */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        {viewMode === 'all' ? (
-          <>
-            <button
-              onClick={() => setWebsiteFilter(websiteFilter === 'live' ? 'all' : 'live')}
-              disabled={liveCount === 0}
-              className={`px-3 py-1.5 rounded-md text-sm font-semibold border disabled:opacity-40 ${
-                websiteFilter === 'live' ? 'bg-green-600 text-white border-green-600' : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
-              }`}
-            >
-              {liveCount} live now
-            </button>
-            <button
-              onClick={() => setWebsiteFilter(websiteFilter === 'missing_coa' ? 'all' : 'missing_coa')}
-              disabled={missingCoaCount === 0}
-              className={`px-3 py-1.5 rounded-md text-sm font-semibold border disabled:opacity-40 ${
-                websiteFilter === 'missing_coa' ? 'bg-amber-600 text-white border-amber-600' : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
-              }`}
-            >
-              {missingCoaCount} no COA on file
-            </button>
-            <button
-              onClick={() => setWebsiteFilter(websiteFilter === 'retest_due' ? 'all' : 'retest_due')}
-              disabled={retestDueCount === 0}
-              className={`px-3 py-1.5 rounded-md text-sm font-semibold border disabled:opacity-40 ${
-                websiteFilter === 'retest_due' ? 'bg-red-600 text-white border-red-600' : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
-              }`}
-            >
-              {retestDueCount} retest due (6mo+)
-            </button>
-            <button
-              onClick={() => setWebsiteFilter(websiteFilter === 'not_live' ? 'all' : 'not_live')}
-              className={`px-3 py-1.5 rounded-md text-sm font-semibold border ${
-                websiteFilter === 'not_live' ? 'bg-gray-700 text-white border-gray-700' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
-              }`}
-            >
-              Not on website
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              onClick={() => setStatusFilter(statusFilter === 'stale' ? 'all' : 'stale')}
-              disabled={staleCount === 0}
-              className={`px-3 py-1.5 rounded-md text-sm font-semibold border disabled:opacity-40 ${
-                statusFilter === 'stale' ? 'bg-red-600 text-white border-red-600' : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
-              }`}
-            >
-              {staleCount} stale
-            </button>
-            <button
-              onClick={() => setStatusFilter(statusFilter === 'swap' ? 'all' : 'swap')}
-              disabled={swapCount === 0}
-              className={`px-3 py-1.5 rounded-md text-sm font-semibold border disabled:opacity-40 ${
-                statusFilter === 'swap' ? 'bg-amber-600 text-white border-amber-600' : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
-              }`}
-            >
-              {swapCount} about to swap
-            </button>
-            <button
-              onClick={() => setStatusFilter(statusFilter === 'no_next' ? 'all' : 'no_next')}
-              disabled={noNextCount === 0}
-              className={`px-3 py-1.5 rounded-md text-sm font-semibold border disabled:opacity-40 ${
-                statusFilter === 'no_next' ? 'bg-red-700 text-white border-red-700' : 'bg-red-50 text-red-800 border-red-300 hover:bg-red-100'
-              }`}
-            >
-              {noNextCount} no next batch
-            </button>
-          </>
-        )}
+        <button
+          onClick={() => setWebsiteFilter(websiteFilter === 'live' ? 'all' : 'live')}
+          disabled={liveCount === 0}
+          className={`px-3 py-1.5 rounded-md text-sm font-semibold border disabled:opacity-40 ${
+            websiteFilter === 'live' ? 'bg-green-600 text-white border-green-600' : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+          }`}
+        >
+          {liveCount} live now
+        </button>
+        <button
+          onClick={() => setWebsiteFilter(websiteFilter === 'missing_coa' ? 'all' : 'missing_coa')}
+          disabled={missingCoaCount === 0}
+          className={`px-3 py-1.5 rounded-md text-sm font-semibold border disabled:opacity-40 ${
+            websiteFilter === 'missing_coa' ? 'bg-amber-600 text-white border-amber-600' : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+          }`}
+        >
+          {missingCoaCount} no COA on file
+        </button>
+        <button
+          onClick={() => setWebsiteFilter(websiteFilter === 'retest_due' ? 'all' : 'retest_due')}
+          disabled={retestDueCount === 0}
+          className={`px-3 py-1.5 rounded-md text-sm font-semibold border disabled:opacity-40 ${
+            websiteFilter === 'retest_due' ? 'bg-red-600 text-white border-red-600' : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+          }`}
+        >
+          {retestDueCount} retest due (6mo+)
+        </button>
+        <button
+          onClick={() => setWebsiteFilter(websiteFilter === 'not_live' ? 'all' : 'not_live')}
+          className={`px-3 py-1.5 rounded-md text-sm font-semibold border ${
+            websiteFilter === 'not_live' ? 'bg-gray-700 text-white border-gray-700' : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+          }`}
+        >
+          Not on website
+        </button>
       </div>
 
       {error && <div className="mb-3 text-sm px-3 py-2 rounded-md bg-red-50 text-red-800">{error}</div>}
@@ -392,7 +201,7 @@ export default function Coas() {
       <div className="mb-3">
         <input
           type="text"
-          placeholder={viewMode === 'all' ? 'Search by SKU, product, batch, or lab…' : 'Search by SKU, product, or batch…'}
+          placeholder="Search by SKU, product, batch, or lab…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           className="w-full sm:w-80 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -401,24 +210,17 @@ export default function Coas() {
 
       {loading ? (
         <div className="text-center py-16 text-gray-400 text-sm">Loading COAs…</div>
-      ) : viewMode === 'all' ? (
+      ) : (
         <Table
           columns={allColumns}
           rows={filteredAll}
           rowClassName={(row) => {
-            if (row._no_coa && row.on_website) return 'bg-amber-50'
+            if (row._no_coa) return 'bg-amber-50'
             if (row.on_website && (row.days_since_tested ?? 0) >= RETEST_DAYS) return 'bg-red-50'
             if (row.on_website) return 'bg-green-50'
             return ''
           }}
           emptyMessage={annotatedCoas.length === 0 ? 'No products yet.' : 'No products match your filters.'}
-        />
-      ) : (
-        <Table
-          columns={skuColumns}
-          rows={filteredSku}
-          rowClassName={(row) => (row._isStale ? 'bg-red-50' : row.note_type === 'swap' ? 'bg-amber-50' : '')}
-          emptyMessage={rows.length === 0 ? 'No SKUs found in your inventory yet.' : 'No SKUs match your filters.'}
         />
       )}
     </div>

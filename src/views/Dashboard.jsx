@@ -6,6 +6,7 @@ import { useApproved } from '../hooks/useApproved.js'
 import DashboardCard from '../components/DashboardCard.jsx'
 import AlertsPanel from '../components/AlertsPanel.jsx'
 import ActivityFeed from '../components/ActivityFeed.jsx'
+import { detectCarrier } from '../utils/trackingUtils.js'
 
 const fmtMoney = (v) =>
   `$${Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -44,6 +45,13 @@ export default function Dashboard({ user, session }) {
       .map(([sku, qty]) => ({ sku, total_qty: qty }))
       .sort((a, b) => a.sku.localeCompare(b.sku))
   }, [received, approved])
+
+  // Orders in transit: status = 'ordered' and has a tracking number
+  const inTransit = useMemo(() => {
+    return orders
+      .filter((o) => o.status === 'ordered' && o.tracking_number && o.tracking_number.trim())
+      .sort((a, b) => (b.date_ordered || '').localeCompare(a.date_ordered || ''))
+  }, [orders])
 
   if (loading) {
     return <div className="flex flex-col items-center justify-center py-20 gap-3"><svg className="w-8 h-8 text-brand-400 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg><span className="text-sm text-gray-400">Loading dashboard...</span></div>
@@ -113,6 +121,52 @@ export default function Dashboard({ user, session }) {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* In Transit */}
+      <div className="glass-strong rounded-xl border border-white/50 shadow-lg shadow-brand-500/5 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-700">Packages in Transit</h3>
+          <span className="text-xs text-gray-400">{inTransit.length} shipment{inTransit.length !== 1 ? 's' : ''}</span>
+        </div>
+        {inTransit.length === 0 ? (
+          <p className="text-sm text-gray-400">No packages currently in transit.</p>
+        ) : (
+          <div className="space-y-2">
+            {inTransit.map((o) => {
+              const { name: carrier, url, color } = detectCarrier(o.tracking_number)
+              return (
+                <div key={o.id} className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg bg-white border border-gray-100 shadow-sm">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold ${color}`}>{carrier}</span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{o.sku} — {o.compound_mg}</p>
+                      <p className="text-xs text-gray-400 truncate">
+                        {o.vendor && <span className="mr-2">{o.vendor}</span>}
+                        {o.date_ordered && <span>Ordered {new Date(o.date_ordered + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="font-mono text-xs text-gray-500 hidden sm:block">{o.tracking_number}</span>
+                    {url ? (
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs px-3 py-1.5 rounded-md bg-brand-600 text-white font-medium hover:bg-brand-700 transition-colors"
+                      >
+                        Track →
+                      </a>
+                    ) : (
+                      <span className="text-xs text-gray-400">{o.tracking_number}</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Alerts + Activity + SKU Summary */}

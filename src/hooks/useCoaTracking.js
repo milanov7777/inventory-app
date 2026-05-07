@@ -88,14 +88,27 @@ function buildAuditRows({ orders, testing }) {
 }
 
 function buildAllCoaRows({ orders, testing }) {
-  const rows = []
+  // Group by SKU — keep only the most recent COA per SKU
+  const bySkuMap = new Map()
+
   for (const t of testing) {
-    if (t.coa_on_file !== 'yes') continue // Only batches with a real COA on file
+    if (t.coa_on_file !== 'yes') continue
 
     const orderInfo = orders.find((o) => o.batch_number === t.batch_number)
     const sku = t.sku || orderInfo?.sku || ''
-    const compound = t.compound_mg || orderInfo?.compound_mg || ''
+    if (!sku) continue
 
+    const existing = bySkuMap.get(sku)
+    const existingDate = existing?.date_results_received || ''
+    const thisDate = t.date_results_received || ''
+
+    if (!existing || thisDate > existingDate) {
+      bySkuMap.set(sku, { ...t, _sku: sku, _compound: t.compound_mg || orderInfo?.compound_mg || '' })
+    }
+  }
+
+  const rows = []
+  for (const t of bySkuMap.values()) {
     const daysSinceTested = t.date_results_received
       ? Math.floor((Date.now() - new Date(t.date_results_received + 'T12:00:00').getTime()) / 86400000)
       : null
@@ -103,8 +116,8 @@ function buildAllCoaRows({ orders, testing }) {
     rows.push({
       id: t.id,
       batch_number: t.batch_number,
-      sku,
-      compound,
+      sku: t._sku,
+      compound: t._compound,
       lab: t.lab,
       date_tested: t.date_results_received || null,
       pass_fail: t.pass_fail,

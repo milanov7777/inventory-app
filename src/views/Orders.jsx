@@ -12,6 +12,7 @@ import { notifySlack } from '../utils/slackNotify.js'
 import { supabase } from '../lib/supabase.js'
 import { logAction } from '../utils/auditLogger.js'
 import { canAdd, canEdit, canDelete, canPromote } from '../utils/permissions.js'
+import { detectCarrier } from '../utils/trackingUtils.js'
 
 const columns = [
   { key: 'sku', label: 'SKU', sticky: true },
@@ -21,7 +22,30 @@ const columns = [
   { key: 'unit_price', label: 'Unit Price', render: (v) => v != null ? `$${Number(v).toFixed(2)}` : '—' },
   { key: 'total_value', label: 'Total', render: (v) => v != null ? `$${Number(v).toFixed(2)}` : '—' },
   { key: 'date_ordered', label: 'Ordered', render: (v) => formatDate(v) },
-  { key: 'tracking_number', label: 'Tracking', truncate: true },
+  {
+    key: 'tracking_number',
+    label: 'Tracking',
+    render: (v) => {
+      if (!v) return <span className="text-gray-400">—</span>
+      const { url, color, name } = detectCarrier(v)
+      return (
+        <span className="flex items-center gap-1.5">
+          <span className="font-mono text-xs text-gray-600 truncate max-w-[120px]">{v}</span>
+          {url && (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold ${color} hover:opacity-80 transition-opacity`}
+            >
+              Track →
+            </a>
+          )}
+        </span>
+      )
+    },
+  },
   { key: 'logged_by', label: 'By' },
   { key: 'notes', label: 'Notes', truncate: true },
 ]
