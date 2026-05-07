@@ -2,8 +2,8 @@ export default function ConfirmDialog({ isOpen, message, onConfirm, onCancel }) 
   if (!isOpen) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
-      <div className="relative bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
+      <div className="absolute inset-0 bg-black/40 animate-fadeIn" onClick={onCancel} />
+      <div className="relative glass-strong rounded-xl shadow-2xl shadow-brand-500/10 p-6 max-w-sm w-full mx-4 animate-slideUp border border-white/60">
         <h3 className="text-base font-semibold text-gray-900 mb-2">Confirm Action</h3>
         <p className="text-sm text-gray-600 mb-6">{message}</p>
         <div className="flex justify-end gap-3">

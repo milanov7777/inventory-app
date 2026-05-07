@@ -2,7 +2,7 @@ import { STAGES } from '../utils/stageConfig.js'
 
 export default function TabBar({ activeKey, onChange, counts = {} }) {
   return (
-    <div className="bg-white border-b border-gray-200 overflow-x-auto">
+    <div className="glass-strong border-b border-gray-200/50 overflow-x-auto">
       <div className="flex min-w-max">
         {STAGES.map((stage) => {
           const isActive = stage.key === activeKey

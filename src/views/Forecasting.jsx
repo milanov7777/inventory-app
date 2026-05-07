@@ -33,7 +33,7 @@ function FlagCard({ flag, onClick }) {
     warning: 'border-yellow-300 bg-yellow-50',
     info: 'border-blue-200 bg-blue-50',
   }
-  const icons = { surge: '🔥', climb: '📈', danger_accel: '⚠️', overdue: '🚨', low: '⚡', new: '🆕', cooling: '❄️' }
+  const icons = { surge: '🔥', climb: '📈', danger_accel: '⚠️', overdue: '🚨', low: '⚡', new: '🆕', cooling: '❄️', warehouse_cover: '📦' }
   return (
     <button onClick={onClick} className={`text-left w-full border rounded-lg p-3 ${colors[flag.severity] || 'border-gray-200 bg-white'} hover:brightness-95 transition-colors`}>
       <div className="flex items-start gap-2">
@@ -69,13 +69,24 @@ export default function Forecasting({ user }) {
     { key: 'daysRemaining', label: 'Days Left', render: (v) => v >= 9999 ? '999+' : v },
     { key: 'trendDir', label: 'Trend', render: (_, row) => <TrendArrow trendDir={row.trendDir} trendPct={row.trendPct} /> },
     { key: 'reorderQty', label: 'Reorder Qty', render: (v) => v > 0 ? v : '—' },
-    { key: 'status', label: 'Status', render: (_, row) => <StatusBadge status={row.status} /> },
+    { key: 'warehouseStock', label: 'In Warehouse', render: (v) => v > 0 ? <span className="text-green-700 font-semibold">{v}</span> : <span className="text-gray-300">—</span> },
+    { key: 'status', label: 'Status', render: (_, row) => (
+      <div className="flex flex-col gap-1 items-start">
+        <StatusBadge status={row.status} />
+        {row.needsRestock && row.warehouseStock > 0 && (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-800 whitespace-nowrap">
+            ✓ {row.warehouseStock} in warehouse
+          </span>
+        )}
+      </div>
+    ) },
   ]
 
   const filtered = useMemo(() => {
     return forecast.filter((row) => {
       const s = filter.toLowerCase()
       if (s && !row.sku?.toLowerCase().includes(s) && !row.product_name?.toLowerCase().includes(s)) return false
+      if (statusFilter === 'variations' && !row.variation_id) return false
       if (statusFilter === 'alerts' && row.status === 'ok') return false
       if (statusFilter === 'new' && !row.isNew) return false
       return true
@@ -124,7 +135,7 @@ export default function Forecasting({ user }) {
             <button
               onClick={() => syncNow('initial')}
               disabled={syncing}
-              className="text-sm px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 shadow-sm disabled:opacity-50"
+              className="text-sm px-4 py-2 gradient-btn text-white rounded-lg shadow-sm disabled:opacity-50"
             >
               {syncing ? 'Loading...' : 'Load History'}
             </button>
@@ -177,6 +188,7 @@ export default function Forecasting({ user }) {
           className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
           <option value="all">All Products</option>
+          <option value="variations">Variations Only</option>
           <option value="alerts">Alerts Only</option>
           <option value="new">New Products</option>
         </select>
@@ -187,7 +199,7 @@ export default function Forecasting({ user }) {
 
       {/* Main Table */}
       {loading ? (
-        <div className="text-center py-12 text-gray-400">Loading forecast data...</div>
+        <div className="flex flex-col items-center justify-center py-12 gap-3"><svg className="w-8 h-8 text-brand-400 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg><span className="text-sm text-gray-400">Loading forecast data...</span></div>
       ) : forecast.length === 0 ? (
         <div className="text-center py-12 text-gray-400">
           <p>No sales data yet.</p>
@@ -239,6 +251,12 @@ export default function Forecasting({ user }) {
               <p className="text-xs text-indigo-700">Quantity: <strong>{selectedItem.reorderQty} units</strong> (to reach 90-day target)</p>
               <p className="text-xs text-indigo-700">Order by: <strong>{selectedItem.reorderByDate}</strong> (lead time: {selectedItem.leadTime} days)</p>
               <p className="text-xs text-indigo-700">Status: <StatusBadge status={selectedItem.status} /></p>
+              {selectedItem.warehouseStock > 0 && (
+                <p className="text-xs text-green-700 mt-1">
+                  📦 <strong>{selectedItem.warehouseStock} units already in warehouse</strong>
+                  {selectedItem.hasWarehouseCover ? ' — enough to cover this reorder.' : ' (partial cover)'}
+                </p>
+              )}
             </div>
 
             <BurnRateChart item={selectedItem} />
@@ -264,7 +282,7 @@ export default function Forecasting({ user }) {
         <div className="border border-gray-200 rounded-xl p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-gray-700">Vendor Lead Times</h3>
-            <button onClick={() => { setLtForm({ vendor_name: '', sku: '', lead_time_days: '', is_domestic: false, notes: '' }); setLtError(null) }} className="text-xs px-3 py-1.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700">
+            <button onClick={() => { setLtForm({ vendor_name: '', sku: '', lead_time_days: '', is_domestic: false, notes: '' }); setLtError(null) }} className="text-xs px-3 py-1.5 gradient-btn text-white rounded-lg">
               + Add Vendor
             </button>
           </div>
@@ -324,7 +342,7 @@ export default function Forecasting({ user }) {
               {ltError && <p className="text-xs text-red-600">{ltError}</p>}
               <div className="flex gap-2">
                 <button type="button" onClick={() => setLtForm(null)} className="px-4 py-2 text-xs bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Cancel</button>
-                <button type="submit" disabled={ltSaving} className="px-4 py-2 text-xs bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50">
+                <button type="submit" disabled={ltSaving} className="px-4 py-2 text-xs gradient-btn text-white rounded-lg disabled:opacity-50">
                   {ltSaving ? 'Saving...' : ltForm.id ? 'Update' : 'Add'}
                 </button>
               </div>

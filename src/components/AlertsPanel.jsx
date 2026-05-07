@@ -2,11 +2,11 @@ import SkuThresholdForm from './SkuThresholdForm.jsx'
 
 export default function AlertsPanel({ lowStockItems, thresholds, onUpdateThreshold, user, allSkus, session }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
+    <div className="glass-strong rounded-xl border border-white/50 shadow-lg shadow-brand-500/5 p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-700">Low Stock Alerts</h3>
         {lowStockItems.length > 0 && (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 animate-pulse-soft">
             {lowStockItems.length} alert{lowStockItems.length !== 1 ? 's' : ''}
           </span>
         )}

@@ -227,5 +227,92 @@ insert into users (username, pin_hash, role) values
   ('Peyton', encode(digest('9012', 'sha256'), 'hex'), 'viewer')
 on conflict (username) do nothing;
 
+-- ============================================================
+-- 23. Batch-as-you-go: batches now assigned at Send-to-Testing
+--     (not at order time). Orders + Received no longer carry
+--     a batch_number for new entries.
+-- ============================================================
+
+-- 23a. New linking columns
+alter table received add column if not exists order_id uuid;
+do $$ begin
+  alter table received
+    add constraint received_order_id_fkey
+    foreign key (order_id) references orders(id)
+    on update cascade on delete set null;
+exception when duplicate_object then null;
+end $$;
+
+alter table received add column if not exists qty_remaining integer;
+
+alter table testing add column if not exists received_id uuid;
+do $$ begin
+  alter table testing
+    add constraint testing_received_id_fkey
+    foreign key (received_id) references received(id)
+    on update cascade on delete set null;
+exception when duplicate_object then null;
+end $$;
+
+-- 23b. Backfill the new links from the existing batch_number chain
+update received r
+   set order_id = o.id
+  from orders o
+ where r.order_id is null and r.batch_number = o.batch_number;
+
+update testing t
+   set received_id = r.id
+  from received r
+ where t.received_id is null and t.batch_number = r.batch_number;
+
+-- 23c. Backfill qty_remaining: 0 if already past testing, else qty_received
+update received r
+   set qty_remaining = case
+     when exists (
+       select 1 from testing t
+        where t.received_id = r.id or t.batch_number = r.batch_number
+     ) then 0
+     else r.qty_received
+   end
+ where r.qty_remaining is null;
+
+-- 23d. Drop old FKs that pointed at orders.batch_number
+alter table received   drop constraint if exists received_batch_number_fkey;
+alter table testing    drop constraint if exists testing_batch_number_fkey;
+alter table approved   drop constraint if exists approved_batch_number_fkey;
+alter table on_website drop constraint if exists on_website_batch_number_fkey;
+
+-- 23e. Drop UNIQUE on orders.batch_number and make it nullable
+alter table orders drop constraint if exists orders_batch_number_key;
+alter table orders alter column batch_number drop not null;
+
+-- 23f. Make received.batch_number nullable
+alter table received alter column batch_number drop not null;
+
+-- 23g. Strip batch numbers per Option B (only items not yet past Received)
+update orders set batch_number = null where status in ('ordered', 'received');
+
+update received r
+   set batch_number = null
+  from orders o
+ where r.order_id = o.id
+   and o.status in ('ordered', 'received')
+   and not exists (select 1 from testing t where t.received_id = r.id);
+
+-- Manual received entries (no order_id) that haven't moved to testing
+update received r
+   set batch_number = null
+ where r.order_id is null
+   and not exists (select 1 from testing t where t.received_id = r.id);
+
+-- 23h. Helpful indexes
+create index if not exists idx_received_order_id    on received(order_id);
+create index if not exists idx_testing_received_id  on testing(received_id);
+
+-- ============================================================
+-- 24. Add 'box' as a storage_location option
+-- ============================================================
+alter type storage_location add value if not exists 'box';
+
 -- Verify
 select 'Schema update complete' as status;

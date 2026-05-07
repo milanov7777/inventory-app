@@ -53,7 +53,7 @@ export default function SkuThresholdForm({ skus, onSave }) {
       <button
         type="submit"
         disabled={!sku || threshold === '' || saving}
-        className="text-sm px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="text-sm px-4 py-2 gradient-btn text-white rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all"
       >
         {saving ? 'Saving…' : 'Set Threshold'}
       </button>

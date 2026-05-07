@@ -14,8 +14,7 @@ import { logAction } from '../utils/auditLogger.js'
 import { canAdd, canEdit, canDelete, canPromote } from '../utils/permissions.js'
 
 const columns = [
-  { key: 'batch_number', label: 'Batch #', sticky: true },
-  { key: 'sku', label: 'SKU' },
+  { key: 'sku', label: 'SKU', sticky: true },
   { key: 'compound_mg', label: 'Compound & MG', bold: true },
   { key: 'vendor', label: 'Vendor' },
   { key: 'qty_ordered', label: 'Qty' },
@@ -34,7 +33,7 @@ const filterFields = [
 ]
 
 const emptyForm = {
-  sku: '', compound_mg: '', qty_ordered: '', batch_number: '',
+  sku: '', compound_mg: '', qty_ordered: '',
   vendor: '', unit_price: '', date_ordered: toISODate(),
   tracking_number: '', shipping_cost: '0', notes: '',
 }
@@ -51,8 +50,8 @@ export default function Orders({ user, session }) {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState(null)
 
-  // Batches already in received
-  const receivedBatches = useMemo(() => new Set(received.map((r) => r.batch_number)), [received])
+  // Orders that already have a received row (so they can't be received again)
+  const receivedOrderIds = useMemo(() => new Set(received.map((r) => r.order_id).filter(Boolean)), [received])
 
   // Color palette for vendor+date groups
   const groupColors = [
@@ -76,9 +75,9 @@ export default function Orders({ user, session }) {
       if (filters.date_ordered_to && row.date_ordered > filters.date_ordered_to) return false
       return true
     })
-    // Sort by date (newest first), then vendor
+    // Sort by date (oldest first), then vendor
     rows.sort((a, b) => {
-      if ((b.date_ordered || '') !== (a.date_ordered || '')) return (b.date_ordered || '').localeCompare(a.date_ordered || '')
+      if ((a.date_ordered || '') !== (b.date_ordered || '')) return (a.date_ordered || '').localeCompare(b.date_ordered || '')
       return (a.vendor || '').localeCompare(b.vendor || '')
     })
     return rows
@@ -108,7 +107,7 @@ export default function Orders({ user, session }) {
     setSelectedRow(row)
     setForm({
       sku: row.sku, compound_mg: row.compound_mg, qty_ordered: row.qty_ordered,
-      batch_number: row.batch_number, vendor: row.vendor, unit_price: row.unit_price,
+      vendor: row.vendor, unit_price: row.unit_price,
       date_ordered: row.date_ordered, tracking_number: row.tracking_number || '',
       shipping_cost: row.shipping_cost || '0', notes: row.notes || '',
     })
@@ -119,10 +118,10 @@ export default function Orders({ user, session }) {
   function openPromote(row) {
     setSelectedRow(row)
     setPromoteForm({
-      batch_number: row.batch_number,
+      order_id: row.id,
       sku: row.sku,
       compound_mg: row.compound_mg,
-      qty_received: '',
+      qty_received: row.qty_ordered || '',
       date_received: toISODate(),
       storage: 'shelf',
       cap_color: '',
@@ -151,7 +150,7 @@ export default function Orders({ user, session }) {
       if (panelMode === 'add') {
         await addOrder(payload, user)
       } else {
-        await updateOrder(selectedRow.id, payload, user, selectedRow.batch_number)
+        await updateOrder(selectedRow.id, payload, user, selectedRow.batch_number || null)
       }
       setPanelMode(null)
     } catch (err) {
@@ -166,9 +165,17 @@ export default function Orders({ user, session }) {
     setSaving(true)
     setFormError(null)
     try {
+      const qty = Number(promoteForm.qty_received)
       const payload = {
-        ...promoteForm,
-        qty_received: Number(promoteForm.qty_received),
+        order_id: promoteForm.order_id,
+        sku: promoteForm.sku,
+        compound_mg: promoteForm.compound_mg,
+        qty_received: qty,
+        qty_remaining: qty,
+        date_received: promoteForm.date_received,
+        storage: promoteForm.storage,
+        cap_color: promoteForm.cap_color || null,
+        notes: promoteForm.notes || null,
         logged_by: user,
       }
       const { error: insertErr } = await supabase.from('received').insert(payload)
@@ -176,10 +183,10 @@ export default function Orders({ user, session }) {
       const { error: statusErr } = await supabase
         .from('orders')
         .update({ status: 'received' })
-        .eq('batch_number', promoteForm.batch_number)
+        .eq('id', promoteForm.order_id)
       if (statusErr) throw new Error(statusErr.message)
-      await logAction({ userName: user, actionType: 'promote', batchNumber: promoteForm.batch_number, stage: 'received', changes: { from: 'orders', to: 'received', ...payload } })
-      notifySlack('order_received', { batch_number: promoteForm.batch_number, user })
+      await logAction({ userName: user, actionType: 'promote', batchNumber: null, stage: 'received', changes: { from: 'orders', to: 'received', order_id: promoteForm.order_id, ...payload } })
+      notifySlack('order_received', { batch_number: '(no batch yet)', user })
       await refetch()
       setPanelMode(null)
     } catch (err) {
@@ -206,7 +213,8 @@ export default function Orders({ user, session }) {
 
   if (error) return <div className="text-red-600 text-sm p-4">Error: {error}</div>
 
-  const canPromoteRow = (row) => !receivedBatches.has(row.batch_number)
+  // Always allow Mark Received — old backfilled links from pre-migration shouldn't block the action.
+  const canPromoteRow = () => true
 
   return (
     <div className="space-y-4">
@@ -214,7 +222,7 @@ export default function Orders({ user, session }) {
         <h2 className="text-2xl font-semibold text-gray-900">Orders</h2>
         <div className="flex gap-2">
           <button onClick={handleExport} className="text-sm px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shadow-sm">Export CSV</button>
-          {canAdd(session) && <button onClick={openAdd} className="text-sm px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors shadow-sm">+ Add Order</button>}
+          {canAdd(session) && <button onClick={openAdd} className="text-sm px-4 py-2 gradient-btn text-white rounded-lg transition-all shadow-sm">+ Add Order</button>}
         </div>
       </div>
 
@@ -239,7 +247,7 @@ export default function Orders({ user, session }) {
       )}
 
       {loading ? (
-        <div className="text-center py-12 text-gray-400">Loading…</div>
+        <div className="flex flex-col items-center justify-center py-12 gap-3"><svg className="w-8 h-8 text-brand-400 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg><span className="text-sm text-gray-400">Loading...</span></div>
       ) : (
         <Table
           columns={columns}
@@ -265,9 +273,6 @@ export default function Orders({ user, session }) {
         title={panelMode === 'add' ? 'New Order' : 'Edit Order'}
       >
         <form onSubmit={handleSave} className="space-y-4">
-          <Field label="Batch #" required>
-            <input className={inputCls} value={form.batch_number} onChange={(e) => f('batch_number', e.target.value)} required />
-          </Field>
           <Field label="SKU" required>
             <input className={inputCls} value={form.sku} onChange={(e) => f('sku', e.target.value)} required />
           </Field>
@@ -305,7 +310,7 @@ export default function Orders({ user, session }) {
           {formError && <p className="text-sm text-red-600">{formError}</p>}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={() => setPanelMode(null)} className="flex-1 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
-            <button type="submit" disabled={saving} className="flex-1 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50">
+            <button type="submit" disabled={saving} className="flex-1 py-2 text-sm font-medium text-white gradient-btn rounded-lg disabled:opacity-50">
               {saving ? 'Saving…' : panelMode === 'add' ? 'Add Order' : 'Save Changes'}
             </button>
           </div>
@@ -319,9 +324,9 @@ export default function Orders({ user, session }) {
         title="Mark as Received"
       >
         <form onSubmit={handlePromote} className="space-y-4">
-          <Field label="Batch #">
-            <input className={inputCls + ' bg-gray-50'} value={promoteForm.batch_number || ''} readOnly />
-          </Field>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900">
+            No batch # yet — that gets assigned when you Send to Testing.
+          </div>
           <Field label="SKU">
             <input className={inputCls + ' bg-gray-50'} value={promoteForm.sku || ''} readOnly />
           </Field>
@@ -340,6 +345,7 @@ export default function Orders({ user, session }) {
             <select className={inputCls} value={promoteForm.storage || 'shelf'} onChange={(e) => setPromoteForm((p) => ({ ...p, storage: e.target.value }))}>
               <option value="shelf">Shelf</option>
               <option value="fridge">Fridge</option>
+              <option value="box">Box</option>
             </select>
           </Field>
           <Field label="Cap Color">
@@ -363,7 +369,7 @@ export default function Orders({ user, session }) {
 
       <ConfirmDialog
         isOpen={!!confirmRow}
-        message={`Delete order for batch "${confirmRow?.batch_number}"? This cannot be undone.`}
+        message={`Delete order ${confirmRow?.sku} — ${confirmRow?.compound_mg}? This cannot be undone.`}
         onConfirm={handleDelete}
         onCancel={() => setConfirmRow(null)}
       />

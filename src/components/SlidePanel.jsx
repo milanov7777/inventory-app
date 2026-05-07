@@ -15,12 +15,12 @@ export default function SlidePanel({ isOpen, onClose, title, children }) {
     <>
       {isOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/30 transition-opacity"
+          className="fixed inset-0 z-30 bg-black/30 animate-fadeIn"
           onClick={onClose}
         />
       )}
       <div
-        className={`fixed top-0 right-0 h-full w-full max-w-lg z-40 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col border-t-2 border-brand-500 ${
+        className={`fixed top-0 right-0 h-full w-full max-w-lg z-40 bg-white shadow-2xl shadow-brand-500/10 transform transition-transform duration-300 ease-in-out flex flex-col border-t-4 border-brand-500 ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >

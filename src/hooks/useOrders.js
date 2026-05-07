@@ -41,11 +41,11 @@ export function useOrders() {
     await logAction({
       userName,
       actionType: 'create',
-      batchNumber: data.batch_number,
+      batchNumber: data.batch_number || null,
       stage: 'orders',
       changes: payload,
     })
-    notifySlack('new_order', { batch_number: data.batch_number, user: userName })
+    notifySlack('new_order', { batch_number: data.batch_number || '(no batch yet)', user: userName })
     return data
   }
 

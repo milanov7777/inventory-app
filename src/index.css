@@ -13,4 +13,24 @@
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
   }
+  .glass-subtle {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .gradient-btn {
+    background: linear-gradient(to right, #a855f7, #7e22ce);
+  }
+  .gradient-btn:hover {
+    filter: brightness(1.1);
+  }
+  .gradient-btn:disabled {
+    filter: none;
+    opacity: 0.4;
+  }
+  .animated-bg {
+    background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 25%, #faf5ff 50%, #e9d5ff 75%, #f3e8ff 100%);
+    background-size: 400% 400%;
+    animation: shimmer 8s ease-in-out infinite;
+  }
 }

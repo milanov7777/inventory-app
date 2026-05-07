@@ -46,15 +46,15 @@ export default function Dashboard({ user, session }) {
   }, [received, approved])
 
   if (loading) {
-    return <div className="text-center py-20 text-gray-400">Loading dashboard...</div>
+    return <div className="flex flex-col items-center justify-center py-20 gap-3"><svg className="w-8 h-8 text-brand-400 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg><span className="text-sm text-gray-400">Loading dashboard...</span></div>
   }
 
   const pipelineStages = [
-    { label: 'Ordered', count: pipelineCounts.ordered, color: 'bg-gray-200 text-gray-800' },
-    { label: 'Received', count: pipelineCounts.received, color: 'bg-green-200 text-green-800' },
-    { label: 'Testing', count: pipelineCounts.testing, color: 'bg-amber-200 text-amber-800' },
-    { label: 'Approved', count: pipelineCounts.approved, color: 'bg-teal-200 text-teal-800' },
-    { label: 'On Website', count: pipelineCounts.on_website, color: 'bg-blue-200 text-blue-800' },
+    { label: 'Ordered', count: pipelineCounts.ordered, color: 'bg-gradient-to-br from-gray-100 to-gray-200 text-gray-800' },
+    { label: 'Received', count: pipelineCounts.received, color: 'bg-gradient-to-br from-green-100 to-green-200 text-green-800' },
+    { label: 'Testing', count: pipelineCounts.testing, color: 'bg-gradient-to-br from-amber-100 to-amber-200 text-amber-800' },
+    { label: 'Approved', count: pipelineCounts.approved, color: 'bg-gradient-to-br from-teal-100 to-teal-200 text-teal-800' },
+    { label: 'On Website', count: pipelineCounts.on_website, color: 'bg-gradient-to-br from-blue-100 to-blue-200 text-blue-800' },
   ]
 
   return (
@@ -96,17 +96,17 @@ export default function Dashboard({ user, session }) {
       </div>
 
       {/* Pipeline Flow Bar */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow p-5">
+      <div className="glass-strong rounded-xl border border-white/50 shadow-lg shadow-brand-500/5 p-5">
         <h3 className="text-sm font-semibold text-gray-700 mb-4">Pipeline Overview</h3>
         <div className="flex items-center gap-1 overflow-x-auto">
           {pipelineStages.map((stage, i) => (
             <div key={stage.label} className="flex items-center">
-              <div className={`flex flex-col items-center px-4 py-3 rounded-xl ${stage.color} min-w-[100px]`}>
+              <div className={`flex flex-col items-center px-4 py-3 rounded-xl ${stage.color} min-w-[100px] shadow-sm`}>
                 <span className="text-2xl font-bold">{stage.count}</span>
                 <span className="text-xs font-medium mt-0.5">{stage.label}</span>
               </div>
               {i < pipelineStages.length - 1 && (
-                <svg className="w-5 h-5 text-gray-300 shrink-0 mx-1" viewBox="0 0 20 20" fill="currentColor">
+                <svg className="w-5 h-5 text-brand-400 shrink-0 mx-1" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
                 </svg>
               )}
@@ -128,7 +128,7 @@ export default function Dashboard({ user, session }) {
           />
 
           {/* SKU Inventory Summary */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow p-6">
+          <div className="glass-strong rounded-xl border border-white/50 shadow-lg shadow-brand-500/5 p-6">
             <h3 className="text-sm font-semibold text-gray-700 mb-4">SKU Inventory Summary</h3>
             {skuSummary.length === 0 ? (
               <p className="text-sm text-gray-400">No inventory data yet.</p>

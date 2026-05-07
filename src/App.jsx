@@ -8,8 +8,10 @@ import Received from './views/Received.jsx'
 import Testing from './views/Testing.jsx'
 import Approved from './views/Approved.jsx'
 import OnWebsite from './views/OnWebsite.jsx'
+import OldOrders from './views/OldOrders.jsx'
 import AuditLog from './views/AuditLog.jsx'
 import Forecasting from './views/Forecasting.jsx'
+import Coas from './views/Coas.jsx'
 import { useOrders } from './hooks/useOrders.js'
 import { useReceived } from './hooks/useReceived.js'
 import { useTesting } from './hooks/useTesting.js'
@@ -46,6 +48,7 @@ export default function App() {
     testing: statusCounts['in_testing'] || 0,
     approved: statusCounts['approved'] || 0,
     on_website: statusCounts['live'] || 0,
+    old_orders: onWebsite.length,
     audit_log: auditEntries.length,
   }
 
@@ -82,14 +85,16 @@ export default function App() {
     approved: <Approved user={user} session={session} />,
     on_website: <OnWebsite user={user} session={session} />,
     forecasting: <Forecasting user={user} />,
+    coas: <Coas />,
     audit_log: <AuditLog />,
+    old_orders: <OldOrders user={user} session={session} />,
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50/30 to-slate-100">
       <NavBar user={user} role={session.role} onSwitch={handleSwitchUser} />
       <TabBar activeKey={activeTab} onChange={setActiveTab} counts={counts} />
-      <main className="max-w-screen-2xl mx-auto px-4 py-6">
+      <main key={activeTab} className="max-w-screen-2xl mx-auto px-4 py-6 animate-slideUp">
         {views[activeTab]}
       </main>
     </div>

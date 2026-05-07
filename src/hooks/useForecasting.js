@@ -6,6 +6,10 @@ export function useForecasting() {
   const [wooStock, setWooStock] = useState([])
   const [leadTimes, setLeadTimes] = useState([])
   const [syncMeta, setSyncMeta] = useState({})
+  const [ordersData, setOrdersData] = useState([])
+  const [receivedData, setReceivedData] = useState([])
+  const [approvedData, setApprovedData] = useState([])
+  const [onWebsiteData, setOnWebsiteData] = useState([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [syncProgress, setSyncProgress] = useState('')
@@ -14,11 +18,15 @@ export function useForecasting() {
   const fetchAll = useCallback(async () => {
     setLoading(true)
     try {
-      const [metricsRes, wooRes, leadRes, metaRes] = await Promise.all([
+      const [metricsRes, wooRes, leadRes, metaRes, ordersRes, receivedRes, approvedRes, onWebsiteRes] = await Promise.all([
         supabase.rpc('get_forecast_metrics'),
         supabase.functions.invoke('woo-products'),
         supabase.from('vendor_lead_times').select('*').order('vendor_name'),
         supabase.from('sync_metadata').select('*'),
+        supabase.from('orders').select('batch_number, status'),
+        supabase.from('received').select('batch_number, sku, qty_received, qty_remaining'),
+        supabase.from('approved').select('batch_number, sku, qty_available'),
+        supabase.from('on_website').select('batch_number, sku, qty_listed'),
       ])
       if (metricsRes.data) setMetrics(Array.isArray(metricsRes.data) ? metricsRes.data : [])
       if (wooRes.data) setWooStock(Array.isArray(wooRes.data) ? wooRes.data : [])
@@ -28,6 +36,10 @@ export function useForecasting() {
         metaRes.data.forEach((r) => { m[r.key] = r.value })
         setSyncMeta(m)
       }
+      if (ordersRes.data) setOrdersData(ordersRes.data)
+      if (receivedRes.data) setReceivedData(receivedRes.data)
+      if (approvedRes.data) setApprovedData(approvedRes.data)
+      if (onWebsiteRes.data) setOnWebsiteData(onWebsiteRes.data)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -94,6 +106,39 @@ export function useForecasting() {
       if (p.sku) stockMap[p.sku.toUpperCase()] = p
     })
 
+    // Existence-based stage tracking (works for both grandfathered and new batch-as-you-go data)
+    // Approved rows that haven't been listed on website yet
+    const websiteBatches = new Set(onWebsiteData.map((o) => o.batch_number).filter(Boolean))
+
+    // Warehouse stock by SKU:
+    //   received items still on the shelf (qty_remaining > 0) — uses qty_remaining for new flow,
+    //   falls back to qty_received for grandfathered rows where qty_remaining is null
+    //   PLUS approved items not yet listed on website
+    const warehouseBySku = {}
+    receivedData.forEach((r) => {
+      const stillOnShelf = r.qty_remaining != null
+        ? r.qty_remaining > 0
+        : true // grandfathered: assume on shelf if no remaining tracking
+      if (!stillOnShelf) return
+      const key = r.sku?.toUpperCase()
+      if (key) {
+        const qty = r.qty_remaining != null ? r.qty_remaining : (r.qty_received || 0)
+        warehouseBySku[key] = (warehouseBySku[key] || 0) + qty
+      }
+    })
+    approvedData.forEach((a) => {
+      if (websiteBatches.has(a.batch_number)) return
+      const key = a.sku?.toUpperCase()
+      if (key) warehouseBySku[key] = (warehouseBySku[key] || 0) + (a.qty_available || 0)
+    })
+
+    // on_website fallback by SKU: only for SKUs not present in WooCommerce
+    const onWebsiteBySku = {}
+    onWebsiteData.forEach((o) => {
+      const key = o.sku?.toUpperCase()
+      if (key) onWebsiteBySku[key] = (onWebsiteBySku[key] || 0) + (o.qty_listed || 0)
+    })
+
     // Build vendor lead time lookup: sku-specific first, then vendor default
     const skuLeadTime = {}
     const vendorDefaults = {}
@@ -107,8 +152,13 @@ export function useForecasting() {
     const defaultLeadTime = Math.max(...Object.values(vendorDefaults), 14)
 
     return metrics.map((m) => {
-      const stock = stockMap[m.sku.toUpperCase()]
-      const currentStock = stock?.stock_quantity ?? 0
+      const skuKey = m.sku.toUpperCase()
+      const stock = stockMap[skuKey]
+      // WooCommerce is the source of truth. Only fall back to the app's on_website
+      // count when the SKU is missing from WooCommerce (listed in app but not yet synced).
+      const wooQty = stock?.stock_quantity
+      const currentStock = wooQty != null ? wooQty : (onWebsiteBySku[skuKey] || 0)
+      const warehouseStock = warehouseBySku[skuKey] || 0
       const burn30 = Number(m.burn_30d) || 0
       const burn7 = Number(m.burn_7d) || 0
       const burn14 = Number(m.burn_14d) || 0
@@ -164,6 +214,11 @@ export function useForecasting() {
       const reorderByDate = new Date()
       reorderByDate.setDate(reorderByDate.getDate() + reorderByDays)
 
+      // Needs restock if status is anything other than 'ok'
+      const needsRestock = status !== 'ok'
+      // True when we already have enough in the warehouse to cover the suggested reorder
+      const hasWarehouseCover = needsRestock && warehouseStock > 0 && warehouseStock >= reorderQty
+
       return {
         ...m,
         currentStock,
@@ -179,9 +234,12 @@ export function useForecasting() {
         isNew,
         reorderQty,
         reorderByDate: reorderByDate.toISOString().split('T')[0],
+        warehouseStock,
+        hasWarehouseCover,
+        needsRestock,
       }
     }).sort((a, b) => a.daysRemaining - b.daysRemaining)
-  }, [metrics, wooStock, leadTimes])
+  }, [metrics, wooStock, leadTimes, ordersData, receivedData, approvedData, onWebsiteData])
 
   // Generate smart flags
   const flags = useMemo(() => {
@@ -217,6 +275,17 @@ export function useForecasting() {
           sku: item.sku,
           title: `${item.product_name} may hit danger zone early`,
           detail: `30-day rate shows ${item.daysRemaining} days left, but recent acceleration cuts it to ${item.daysRemainingAccelerated} days. Consider reordering now.`,
+        })
+      }
+
+      // Warehouse cover — we already have enough in the warehouse to restock
+      if (item.hasWarehouseCover) {
+        f.push({
+          type: 'warehouse_cover',
+          severity: 'info',
+          sku: item.sku,
+          title: `${item.product_name} — cover from warehouse`,
+          detail: `${item.warehouseStock} units already in warehouse (need ${item.reorderQty}). List what you have instead of reordering.`,
         })
       }
 

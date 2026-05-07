@@ -64,7 +64,7 @@ export default function Table({
       {/* Desktop table */}
       <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 shadow">
         <table className="min-w-full divide-y divide-gray-200 text-[14px]">
-          <thead className="bg-gray-50">
+          <thead className="glass-subtle sticky top-0 z-20">
             <tr>
               {columns.map((col) => (
                 <th
@@ -150,7 +150,7 @@ export default function Table({
                             title={enabled ? promoteLabel : (promotedLabel || 'Already promoted')}
                             className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors ${
                               enabled
-                                ? 'bg-brand-600 text-white hover:bg-brand-700 shadow-sm'
+                                ? 'gradient-btn text-white shadow-sm'
                                 : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                             }`}
                           >
@@ -217,7 +217,7 @@ export default function Table({
                       onClick={(e) => { e.stopPropagation(); enabled && onPromote(row) }}
                       disabled={!enabled}
                       className={`flex-1 text-xs py-2 rounded-lg font-semibold ${
-                        enabled ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-400'
+                        enabled ? 'gradient-btn text-white' : 'bg-gray-100 text-gray-400'
                       }`}
                     >
                       {enabled ? `${promoteLabel} →` : (promotedLabel || `${promoteLabel} ✓`)}

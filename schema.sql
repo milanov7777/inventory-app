@@ -15,7 +15,7 @@ create type order_status as enum (
   'ordered', 'received', 'in_testing', 'approved', 'live', 'failed'
 );
 
-create type storage_location as enum ('fridge', 'shelf');
+create type storage_location as enum ('fridge', 'shelf', 'box');
 
 create type pass_fail_result as enum ('pass', 'fail');
 
@@ -36,13 +36,16 @@ create table users (
 -- TABLE: orders  (Stage 1)
 -- vendor and date_ordered are nullable — some historical records
 -- and received-only entries don't have this info.
+-- batch_number is nullable: under the batch-as-you-go flow,
+-- batches are assigned at Send-to-Testing, not at order time.
+-- Grandfathered rows may still carry a batch_number.
 -- ============================================================
 create table orders (
   id              uuid primary key default uuid_generate_v4(),
   sku             text not null,
   compound_mg     text not null,
   qty_ordered     integer not null check (qty_ordered >= 0),
-  batch_number    text unique not null,
+  batch_number    text,                          -- nullable: assigned at testing now
   vendor          text,                          -- nullable: some entries have no vendor
   unit_price      numeric(10, 2) not null default 0 check (unit_price >= 0),
   date_ordered    date,                          -- nullable: some historical entries lack date
@@ -58,31 +61,39 @@ create table orders (
 
 -- ============================================================
 -- TABLE: received  (Stage 2)
+-- order_id links back to orders (no batch_number yet).
+-- qty_remaining tracks how many vials are still available
+-- to send to testing (decreases when batches are created).
+-- batch_number stays for grandfathered rows from before the
+-- batch-as-you-go flow.
 -- ============================================================
 create table received (
-  id            uuid primary key default uuid_generate_v4(),
-  batch_number  text not null references orders(batch_number)
-                  on update cascade on delete restrict,
-  sku           text not null,
-  compound_mg   text not null,
-  qty_received  integer not null check (qty_received >= 0),
-  date_received date,
-  storage       storage_location not null default 'shelf',
-  cap_color     text,
-  logged_by     text not null,
-  notes         text,
-  created_at    timestamptz not null default now()
+  id             uuid primary key default uuid_generate_v4(),
+  order_id       uuid references orders(id) on update cascade on delete set null,
+  batch_number   text,                         -- nullable, grandfathered only
+  sku            text not null,
+  compound_mg    text not null,
+  qty_received   integer not null check (qty_received >= 0),
+  qty_remaining  integer,                      -- starts = qty_received, decrements on Send-to-Testing
+  date_received  date,
+  storage        storage_location not null default 'shelf',
+  cap_color      text,
+  logged_by      text not null,
+  notes          text,
+  created_at     timestamptz not null default now()
 );
 
 -- ============================================================
 -- TABLE: testing  (Stage 3)
--- lab field added: FREEDOM, VANGUARD, etc.
--- vials_sent made nullable (some batches have unknown qty at time of send)
+-- This is where batches first exist. batch_number is set here
+-- (auto or manual) and carries through Approved + On Website.
+-- received_id links back to the shipment it came from.
+-- One received row can spawn multiple testing rows (split batches).
 -- ============================================================
 create table testing (
   id                    uuid primary key default uuid_generate_v4(),
-  batch_number          text not null references orders(batch_number)
-                          on update cascade on delete restrict,
+  received_id           uuid references received(id) on update cascade on delete set null,
+  batch_number          text not null,
   sku                   text not null,
   compound_mg           text not null,
   lab                   text,                    -- testing lab name e.g. FREEDOM, VANGUARD
@@ -98,11 +109,12 @@ create table testing (
 
 -- ============================================================
 -- TABLE: approved  (Stage 4)
+-- batch_number links by name to the testing row (no DB FK,
+-- enforced by app code).
 -- ============================================================
 create table approved (
   id            uuid primary key default uuid_generate_v4(),
-  batch_number  text not null references orders(batch_number)
-                  on update cascade on delete restrict,
+  batch_number  text not null,
   sku           text not null,
   compound_mg   text not null,
   qty_available integer not null check (qty_available >= 0),
@@ -115,11 +127,12 @@ create table approved (
 
 -- ============================================================
 -- TABLE: on_website  (Stage 5)
+-- batch_number links by name to the testing row (no DB FK,
+-- enforced by app code).
 -- ============================================================
 create table on_website (
   id            uuid primary key default uuid_generate_v4(),
-  batch_number  text not null references orders(batch_number)
-                  on update cascade on delete restrict,
+  batch_number  text not null,
   sku           text not null,
   compound_mg   text not null,
   qty_listed    integer not null check (qty_listed >= 0),
@@ -168,7 +181,9 @@ create index idx_orders_batch        on orders(batch_number);
 create index idx_orders_status       on orders(status);
 create index idx_orders_vendor       on orders(vendor);
 create index idx_received_batch      on received(batch_number);
+create index idx_received_order_id   on received(order_id);
 create index idx_testing_batch       on testing(batch_number);
+create index idx_testing_received_id on testing(received_id);
 create index idx_approved_batch      on approved(batch_number);
 create index idx_on_website_batch    on on_website(batch_number);
 create index idx_audit_log_timestamp on audit_log(timestamp desc);

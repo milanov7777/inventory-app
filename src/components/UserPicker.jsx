@@ -38,10 +38,10 @@ export default function UserPicker({ onSelect }) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-100 via-purple-50 to-slate-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm">
+    <div className="min-h-screen animated-bg flex items-center justify-center p-4">
+      <div className="glass-strong rounded-2xl shadow-2xl shadow-brand-500/10 p-8 w-full max-w-sm border border-white/60">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-brand-100 rounded-2xl mb-4">
+          <div className="inline-flex items-center justify-center w-14 h-14 bg-brand-100 rounded-2xl mb-4 animate-float">
             <svg className="w-7 h-7 text-brand-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
             </svg>
@@ -81,7 +81,7 @@ export default function UserPicker({ onSelect }) {
           <button
             type="submit"
             disabled={!selected || !pin || verifying}
-            className="w-full py-3 px-4 bg-brand-600 text-white font-semibold rounded-xl hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="w-full py-3 px-4 gradient-btn text-white font-semibold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-500/25"
           >
             {verifying ? 'Verifying…' : 'Enter'}
           </button>

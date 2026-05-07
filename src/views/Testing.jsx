@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useTesting } from '../hooks/useTesting.js'
 import { useApproved } from '../hooks/useApproved.js'
 import { useOrders } from '../hooks/useOrders.js'
+import { useReceived } from '../hooks/useReceived.js'
 import Table from '../components/Table.jsx'
 import SearchFilter from '../components/SearchFilter.jsx'
 import Badge from '../components/Badge.jsx'
@@ -39,7 +40,7 @@ function ResultCell({ row, onQuickResult, readOnly }) {
 const filterFields = [
   { key: 'search', label: 'Search', type: 'text', placeholder: 'Search by SKU or compound...' },
   { key: 'pass_fail', label: 'Result', type: 'select', options: ['pass', 'fail'] },
-  { key: 'lab', label: 'Lab', type: 'select', options: ['Freedom', 'Vanguard'] },
+  { key: 'lab', label: 'Lab', type: 'select', options: ['Freedom', 'Vanguard', 'Ethos'] },
   { key: 'date_sent', label: 'Date Sent', type: 'date-range' },
 ]
 
@@ -49,6 +50,7 @@ export default function Testing({ user, session }) {
   const { testing, loading, error, addTesting, updateTesting, deleteTesting } = useTesting()
   const { approved } = useApproved()
   const { orders, refetch } = useOrders()
+  const { received } = useReceived()
   const [filters, setFilters] = useState({})
   const [panelMode, setPanelMode] = useState(null)
   const [selectedRow, setSelectedRow] = useState(null)
@@ -59,30 +61,43 @@ export default function Testing({ user, session }) {
   const [formError, setFormError] = useState(null)
 
   const approvedBatches = useMemo(() => new Set(approved.map((r) => r.batch_number)), [approved])
-  const orderMap = useMemo(() => {
+  // Grandfathered: orders.batch_number → order
+  const orderByBatch = useMemo(() => {
     const map = {}
-    orders.forEach((o) => { map[o.batch_number] = o })
+    orders.forEach((o) => { if (o.batch_number) map[o.batch_number] = o })
     return map
   }, [orders])
-  const orderStatusMap = useMemo(() => {
+  // New flow: chain testing → received → orders by id
+  const receivedById = useMemo(() => {
     const map = {}
-    orders.forEach((o) => { map[o.batch_number] = o.status })
+    received.forEach((r) => { map[r.id] = r })
+    return map
+  }, [received])
+  const orderById = useMemo(() => {
+    const map = {}
+    orders.forEach((o) => { map[o.id] = o })
     return map
   }, [orders])
 
+  function lookupOrder(testingRow) {
+    if (orderByBatch[testingRow.batch_number]) return orderByBatch[testingRow.batch_number]
+    const rec = testingRow.received_id ? receivedById[testingRow.received_id] : null
+    if (rec?.order_id) return orderById[rec.order_id] || {}
+    return {}
+  }
+
   const enriched = useMemo(() =>
     testing.map((r) => {
-      const o = orderMap[r.batch_number] || {}
-      return { ...r, _orderStatus: orderStatusMap[r.batch_number] || 'in_testing', vendor: o.vendor, unit_price: o.unit_price, total_value: o.total_value, qty_ordered: o.qty_ordered }
+      const o = lookupOrder(r)
+      return { ...r, _orderStatus: o.status || 'in_testing', vendor: o.vendor, unit_price: o.unit_price, total_value: o.total_value, qty_ordered: o.qty_ordered }
     }),
-    [testing, orderMap, orderStatusMap]
+    [testing, orderByBatch, receivedById, orderById]
   )
 
   const filtered = useMemo(() => {
     return enriched.filter((row) => {
-      // Only show items currently at testing stage
-      const status = orderStatusMap[row.batch_number]
-      if (status && status !== 'in_testing') return false
+      // Show testing rows that haven't been approved yet (existence-based, works with split batches)
+      if (approvedBatches.has(row.batch_number)) return false
       const s = filters.search?.toLowerCase() || ''
       if (s && !row.sku?.toLowerCase().includes(s) && !row.compound_mg?.toLowerCase().includes(s)) return false
       if (filters.pass_fail && row.pass_fail !== filters.pass_fail) return false
@@ -91,7 +106,7 @@ export default function Testing({ user, session }) {
       if (filters.date_sent_to && row.date_sent > filters.date_sent_to) return false
       return true
     })
-  }, [enriched, filters, orderStatusMap])
+  }, [enriched, filters, approvedBatches])
 
   const f = (key, value) => setForm((p) => ({ ...p, [key]: value }))
 
@@ -206,7 +221,7 @@ export default function Testing({ user, session }) {
         </div>
       </div>
       <SearchFilter fields={filterFields} onFilter={setFilters} />
-      {loading ? <div className="text-center py-12 text-gray-400">Loading...</div> : (
+      {loading ? <div className="flex flex-col items-center justify-center py-12 gap-3"><svg className="w-8 h-8 text-brand-400 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg><span className="text-sm text-gray-400">Loading...</span></div> : (
         <Table columns={columns} rows={filtered} onEdit={canEdit(session) ? openEdit : undefined} onDelete={canDelete(session) ? (row) => setConfirmRow(row) : undefined}
           onPromote={canPromote(session) ? openPromote : undefined} promoteLabel="Approve" promotedLabel="Approved ✓"
           canPromote={canApproveRow}
@@ -223,6 +238,7 @@ export default function Testing({ user, session }) {
               <option value="">Select lab...</option>
               <option value="Freedom">Freedom</option>
               <option value="Vanguard">Vanguard</option>
+              <option value="Ethos">Ethos</option>
               <option value="Other">Other</option>
             </select>
           </Field>
@@ -269,6 +285,7 @@ export default function Testing({ user, session }) {
             <select className={ic} value={promoteForm.storage || 'shelf'} onChange={(e) => setPromoteForm((p) => ({ ...p, storage: e.target.value }))}>
               <option value="shelf">Shelf</option>
               <option value="fridge">Fridge</option>
+              <option value="box">Box</option>
             </select>
           </Field>
           <Field label="Logged By"><input className={ic + ' bg-gray-50'} value={user} readOnly /></Field>

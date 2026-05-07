@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react'
 import { useApproved } from '../hooks/useApproved.js'
 import { useOnWebsite } from '../hooks/useOnWebsite.js'
 import { useOrders } from '../hooks/useOrders.js'
+import { useReceived } from '../hooks/useReceived.js'
+import { useTesting } from '../hooks/useTesting.js'
 import Table from '../components/Table.jsx'
 import SearchFilter from '../components/SearchFilter.jsx'
 import Badge from '../components/Badge.jsx'
@@ -26,7 +28,7 @@ const columns = [
   { key: 'approved_date', label: 'Approved', render: (v) => formatDate(v) },
   { key: 'storage', label: 'Storage', render: (v) => v ? (
     <span className="flex items-center gap-1.5">
-      <span className={`w-2.5 h-2.5 rounded-full ${v === 'fridge' ? 'bg-blue-500' : 'bg-gray-400'}`} />
+      <span className={`w-2.5 h-2.5 rounded-full ${v === 'fridge' ? 'bg-blue-500' : v === 'box' ? 'bg-yellow-400' : 'bg-gray-400'}`} />
       {v.charAt(0).toUpperCase() + v.slice(1)}
     </span>
   ) : '—' },
@@ -37,7 +39,7 @@ const columns = [
 
 const filterFields = [
   { key: 'search', label: 'Search SKU / Compound', type: 'text' },
-  { key: 'storage', label: 'Storage', type: 'select', options: ['fridge', 'shelf'] },
+  { key: 'storage', label: 'Storage', type: 'select', options: ['fridge', 'shelf', 'box'] },
   { key: 'approved_date', label: 'Approved Date', type: 'date-range' },
 ]
 
@@ -47,6 +49,8 @@ export default function Approved({ user, session }) {
   const { approved, loading, error, addApproved, updateApproved, deleteApproved } = useApproved()
   const { onWebsite } = useOnWebsite()
   const { orders, refetch } = useOrders()
+  const { received } = useReceived()
+  const { testing } = useTesting()
   const [filters, setFilters] = useState({})
   const [panelMode, setPanelMode] = useState(null)
   const [selectedRow, setSelectedRow] = useState(null)
@@ -57,30 +61,51 @@ export default function Approved({ user, session }) {
   const [formError, setFormError] = useState(null)
 
   const websiteBatches = useMemo(() => new Set(onWebsite.map((r) => r.batch_number)), [onWebsite])
-  const orderMap = useMemo(() => {
+  // Grandfathered lookup
+  const orderByBatch = useMemo(() => {
     const map = {}
-    orders.forEach((o) => { map[o.batch_number] = o })
+    orders.forEach((o) => { if (o.batch_number) map[o.batch_number] = o })
     return map
   }, [orders])
-  const orderStatusMap = useMemo(() => {
+  // New-flow chain: approved.batch_number → testing → received → order
+  const testingByBatch = useMemo(() => {
     const map = {}
-    orders.forEach((o) => { map[o.batch_number] = o.status })
+    testing.forEach((t) => { map[t.batch_number] = t })
+    return map
+  }, [testing])
+  const receivedById = useMemo(() => {
+    const map = {}
+    received.forEach((r) => { map[r.id] = r })
+    return map
+  }, [received])
+  const orderById = useMemo(() => {
+    const map = {}
+    orders.forEach((o) => { map[o.id] = o })
     return map
   }, [orders])
+
+  function lookupOrder(approvedRow) {
+    if (orderByBatch[approvedRow.batch_number]) return orderByBatch[approvedRow.batch_number]
+    const t = testingByBatch[approvedRow.batch_number]
+    if (t?.received_id) {
+      const rec = receivedById[t.received_id]
+      if (rec?.order_id) return orderById[rec.order_id] || {}
+    }
+    return {}
+  }
 
   const enriched = useMemo(() =>
     approved.map((r) => {
-      const o = orderMap[r.batch_number] || {}
-      return { ...r, _orderStatus: orderStatusMap[r.batch_number] || 'approved', vendor: o.vendor, unit_price: o.unit_price, total_value: o.total_value, qty_ordered: o.qty_ordered }
+      const o = lookupOrder(r)
+      return { ...r, _orderStatus: o.status || 'approved', vendor: o.vendor, unit_price: o.unit_price, total_value: o.total_value, qty_ordered: o.qty_ordered }
     }),
-    [approved, orderMap, orderStatusMap]
+    [approved, orderByBatch, testingByBatch, receivedById, orderById]
   )
 
   const filtered = useMemo(() => {
-    return enriched.filter((row) => {
-      // Only show items currently at approved stage — not already on website
-      const status = orderStatusMap[row.batch_number]
-      if (status && status !== 'approved') return false
+    const rows = enriched.filter((row) => {
+      // Show approved rows that haven't been listed on website yet (existence-based)
+      if (websiteBatches.has(row.batch_number)) return false
       const s = filters.search?.toLowerCase() || ''
       if (s && !row.sku?.toLowerCase().includes(s) && !row.compound_mg?.toLowerCase().includes(s)) return false
       if (filters.storage && row.storage !== filters.storage) return false
@@ -88,7 +113,10 @@ export default function Approved({ user, session }) {
       if (filters.approved_date_to && row.approved_date > filters.approved_date_to) return false
       return true
     })
-  }, [enriched, filters, orderStatusMap])
+    // Sort by approved_date, oldest first
+    rows.sort((a, b) => (a.approved_date || '').localeCompare(b.approved_date || ''))
+    return rows
+  }, [enriched, filters, websiteBatches])
 
   const f = (key, value) => setForm((p) => ({ ...p, [key]: value }))
 
@@ -151,7 +179,7 @@ export default function Approved({ user, session }) {
         </div>
       </div>
       <SearchFilter fields={filterFields} onFilter={setFilters} />
-      {loading ? <div className="text-center py-12 text-gray-400">Loading…</div> : (
+      {loading ? <div className="flex flex-col items-center justify-center py-12 gap-3"><svg className="w-8 h-8 text-brand-400 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg><span className="text-sm text-gray-400">Loading...</span></div> : (
         <Table columns={columns} rows={filtered} onEdit={canEdit(session) ? openEdit : undefined} onDelete={canDelete(session) ? (row) => setConfirmRow(row) : undefined}
           onPromote={canPromote(session) ? openPromote : undefined} promoteLabel="List on Website" promotedLabel="Listed ✓"
           canPromote={(row) => !websiteBatches.has(row.batch_number)}
@@ -171,6 +199,7 @@ export default function Approved({ user, session }) {
             <select className={ic} value={form.storage} onChange={(e) => f('storage', e.target.value)}>
               <option value="shelf">Shelf</option>
               <option value="fridge">Fridge</option>
+              <option value="box">Box</option>
             </select>
           </Field>
           <Field label="Logged By"><input className={ic + ' bg-gray-50'} value={user} readOnly /></Field>
