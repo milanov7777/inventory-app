@@ -87,6 +87,36 @@ function buildAuditRows({ orders, testing }) {
   return rows.sort((a, b) => a.sku.localeCompare(b.sku))
 }
 
+function buildAllCoaRows({ orders, testing }) {
+  const rows = []
+  for (const t of testing) {
+    if (t.coa_on_file !== 'yes') continue // Only batches with a real COA on file
+
+    const orderInfo = orders.find((o) => o.batch_number === t.batch_number)
+    const sku = t.sku || orderInfo?.sku || ''
+    const compound = t.compound_mg || orderInfo?.compound_mg || ''
+
+    const daysSinceTested = t.date_results_received
+      ? Math.floor((Date.now() - new Date(t.date_results_received + 'T12:00:00').getTime()) / 86400000)
+      : null
+
+    rows.push({
+      id: t.id,
+      batch_number: t.batch_number,
+      sku,
+      compound,
+      lab: t.lab,
+      date_tested: t.date_results_received || null,
+      pass_fail: t.pass_fail,
+      days_since_tested: daysSinceTested,
+    })
+  }
+
+  // Sort newest COA first
+  rows.sort((a, b) => (b.date_tested || '').localeCompare(a.date_tested || ''))
+  return rows
+}
+
 export function useCoaTracking() {
   const [orders, setOrders] = useState([])
   const [testing, setTesting] = useState([])
@@ -126,6 +156,7 @@ export function useCoaTracking() {
   }, [fetchAll])
 
   const rows = useMemo(() => buildAuditRows({ orders, testing }), [orders, testing])
+  const allCoas = useMemo(() => buildAllCoaRows({ orders, testing }), [orders, testing])
 
-  return { rows, loading, error, refetch: fetchAll }
+  return { rows, allCoas, loading, error, refetch: fetchAll }
 }
