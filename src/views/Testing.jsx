@@ -98,6 +98,8 @@ export default function Testing({ user, session }) {
     return enriched.filter((row) => {
       // Show testing rows that haven't been approved yet (existence-based, works with split batches)
       if (approvedBatches.has(row.batch_number)) return false
+      // Exclude COA-only records (bulk-inserted: already have pass result but were never sent to a lab)
+      if (row.pass_fail === 'pass' && !row.date_sent) return false
       const s = filters.search?.toLowerCase() || ''
       if (s && !row.sku?.toLowerCase().includes(s) && !row.compound_mg?.toLowerCase().includes(s)) return false
       if (filters.pass_fail && row.pass_fail !== filters.pass_fail) return false
