@@ -42,10 +42,17 @@ export default function App() {
   const statusCounts = {}
   orders.forEach((o) => { statusCounts[o.status] = (statusCounts[o.status] || 0) + 1 })
 
+  // Testing count: use testing table directly, same filter as Testing tab
+  // (exclude COA-only bulk inserts: pass_fail='pass' with no date_sent)
+  const approvedBatchSet = new Set(approved.map((r) => r.batch_number))
+  const pendingTestingCount = testing.filter(
+    (r) => !approvedBatchSet.has(r.batch_number) && !(r.pass_fail === 'pass' && !r.date_sent)
+  ).length
+
   const counts = {
     orders: statusCounts['ordered'] || 0,
     received: statusCounts['received'] || 0,
-    testing: statusCounts['in_testing'] || 0,
+    testing: pendingTestingCount,
     approved: statusCounts['approved'] || 0,
     on_website: statusCounts['live'] || 0,
     old_orders: onWebsite.length,
