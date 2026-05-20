@@ -15,6 +15,7 @@ import { exportCsv } from '../utils/exportCsv.js'
 import { supabase } from '../lib/supabase.js'
 import { logAction } from '../utils/auditLogger.js'
 import { canAdd, canEdit, canDelete, canPromote } from '../utils/permissions.js'
+import { detectCarrier } from '../utils/trackingUtils.js'
 
 const columns = [
   { key: 'batch_number', label: 'Batch #', sticky: true },
@@ -32,6 +33,16 @@ const columns = [
       {v.charAt(0).toUpperCase() + v.slice(1)}
     </span>
   ) : '—' },
+  { key: 'tracking_number', label: 'Tracking', render: (v) => {
+    if (!v) return '—'
+    const { name, url, color } = detectCarrier(v)
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${color}`}>{name}</span>
+        {url ? <a href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-brand-600 hover:underline font-medium">Track →</a> : <span className="font-mono text-xs text-gray-500">{v}</span>}
+      </div>
+    )
+  }},
   { key: 'logged_by', label: 'By' },
   { key: 'status', label: 'Status', render: (_, row) => <Badge status={row._orderStatus} /> },
   { key: 'notes', label: 'Notes', truncate: true },
@@ -97,7 +108,7 @@ export default function Approved({ user, session }) {
   const enriched = useMemo(() =>
     approved.map((r) => {
       const o = lookupOrder(r)
-      return { ...r, _orderStatus: o.status || 'approved', vendor: o.vendor, unit_price: o.unit_price, total_value: o.total_value, qty_ordered: o.qty_ordered }
+      return { ...r, _orderStatus: o.status || 'approved', vendor: o.vendor, unit_price: o.unit_price, total_value: o.total_value, qty_ordered: o.qty_ordered, tracking_number: o.tracking_number }
     }),
     [approved, orderByBatch, testingByBatch, receivedById, orderById]
   )
