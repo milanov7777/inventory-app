@@ -17,7 +17,7 @@ import { detectCarrier } from '../utils/trackingUtils.js'
 
 const filterFields = [
   { key: 'search', label: 'Search SKU / Compound', type: 'text' },
-  { key: 'storage', label: 'Storage', type: 'select', options: ['fridge', 'shelf', 'box'] },
+  { key: 'storage', label: 'Storage', type: 'select', options: ['fridge', 'shelf', 'box', 'overstock'] },
   { key: 'date_received', label: 'Date Received', type: 'date-range' },
 ]
 
@@ -96,7 +96,7 @@ export default function Received({ user, session }) {
     { key: 'date_received', label: 'Received', render: (v) => formatDate(v) },
     { key: 'storage', label: 'Storage', render: (v) => v ? (
       <span className="flex items-center gap-1.5">
-        <span className={`w-2.5 h-2.5 rounded-full ${v === 'fridge' ? 'bg-blue-500' : v === 'box' ? 'bg-yellow-400' : 'bg-gray-400'}`} />
+        <span className={`w-2.5 h-2.5 rounded-full ${v === 'fridge' ? 'bg-blue-500' : v === 'box' ? 'bg-yellow-400' : v === 'overstock' ? 'bg-yellow-500' : 'bg-gray-400'}`} />
         {v.charAt(0).toUpperCase() + v.slice(1)}
       </span>
     ) : '—' },
@@ -289,6 +289,7 @@ export default function Received({ user, session }) {
                 <option value="shelf">Shelf</option>
                 <option value="fridge">Fridge</option>
                 <option value="box">Box</option>
+                <option value="overstock">Overstock Shelf</option>
               </select>
             </Field>
             <Field label="Cap Color"><input className={ic} value={form.cap_color} onChange={(e) => f('cap_color', e.target.value)} /></Field>

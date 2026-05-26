@@ -370,6 +370,7 @@ export default function Orders({ user, session }) {
               <option value="shelf">Shelf</option>
               <option value="fridge">Fridge</option>
               <option value="box">Box</option>
+              <option value="overstock">Overstock Shelf</option>
             </select>
           </Field>
           <Field label="Cap Color">

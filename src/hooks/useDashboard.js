@@ -20,7 +20,7 @@ export function useDashboard() {
         supabase
           .from('orders')
           .select('total_value, status')
-          .in('status', ['received', 'in_testing', 'approved', 'live']),
+          .in('status', ['ordered', 'received', 'in_testing', 'approved']),
         supabase
           .from('audit_log')
           .select('*')

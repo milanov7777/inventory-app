@@ -299,6 +299,7 @@ export default function Testing({ user, session }) {
               <option value="shelf">Shelf</option>
               <option value="fridge">Fridge</option>
               <option value="box">Box</option>
+              <option value="overstock">Overstock Shelf</option>
             </select>
           </Field>
           <Field label="Logged By"><input className={ic + ' bg-gray-50'} value={user} readOnly /></Field>

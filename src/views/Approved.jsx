@@ -29,7 +29,7 @@ const columns = [
   { key: 'approved_date', label: 'Approved', render: (v) => formatDate(v) },
   { key: 'storage', label: 'Storage', render: (v) => v ? (
     <span className="flex items-center gap-1.5">
-      <span className={`w-2.5 h-2.5 rounded-full ${v === 'fridge' ? 'bg-blue-500' : v === 'box' ? 'bg-yellow-400' : 'bg-gray-400'}`} />
+      <span className={`w-2.5 h-2.5 rounded-full ${v === 'fridge' ? 'bg-blue-500' : v === 'box' ? 'bg-yellow-400' : v === 'overstock' ? 'bg-yellow-500' : 'bg-gray-400'}`} />
       {v.charAt(0).toUpperCase() + v.slice(1)}
     </span>
   ) : '—' },
@@ -50,7 +50,7 @@ const columns = [
 
 const filterFields = [
   { key: 'search', label: 'Search SKU / Compound', type: 'text' },
-  { key: 'storage', label: 'Storage', type: 'select', options: ['fridge', 'shelf', 'box'] },
+  { key: 'storage', label: 'Storage', type: 'select', options: ['fridge', 'shelf', 'box', 'overstock'] },
   { key: 'approved_date', label: 'Approved Date', type: 'date-range' },
 ]
 
@@ -211,6 +211,7 @@ export default function Approved({ user, session }) {
               <option value="shelf">Shelf</option>
               <option value="fridge">Fridge</option>
               <option value="box">Box</option>
+              <option value="overstock">Overstock Shelf</option>
             </select>
           </Field>
           <Field label="Logged By"><input className={ic + ' bg-gray-50'} value={user} readOnly /></Field>

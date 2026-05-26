@@ -15,7 +15,7 @@ create type order_status as enum (
   'ordered', 'received', 'in_testing', 'approved', 'live', 'failed'
 );
 
-create type storage_location as enum ('fridge', 'shelf', 'box');
+create type storage_location as enum ('fridge', 'shelf', 'box', 'overstock');
 
 create type pass_fail_result as enum ('pass', 'fail');
 

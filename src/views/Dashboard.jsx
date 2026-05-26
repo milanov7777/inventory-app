@@ -94,7 +94,7 @@ export default function Dashboard({ user, session }) {
           label="Inventory Value"
           value={fmtMoney(stats.totalValue)}
           color="border-cyan-500"
-          sub="at cost"
+          sub="ordered → approved (at cost)"
         />
         <DashboardCard
           label="In Testing"

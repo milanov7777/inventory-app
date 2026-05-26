@@ -314,5 +314,10 @@ create index if not exists idx_testing_received_id  on testing(received_id);
 -- ============================================================
 alter type storage_location add value if not exists 'box';
 
+-- ============================================================
+-- 25. Add 'overstock' as a storage_location option (yellow tag in UI)
+-- ============================================================
+alter type storage_location add value if not exists 'overstock';
+
 -- Verify
 select 'Schema update complete' as status;
