@@ -102,6 +102,7 @@ create table testing (
   date_results_received date,
   pass_fail             pass_fail_result,
   coa_on_file           coa_status not null default 'no',
+  coa_file_path         text,
   logged_by             text not null,
   notes                 text,
   created_at            timestamptz not null default now()

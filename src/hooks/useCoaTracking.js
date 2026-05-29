@@ -122,6 +122,7 @@ function buildAllCoaRows({ orders, testing }) {
       date_tested: t.date_results_received || null,
       pass_fail: t.pass_fail,
       days_since_tested: daysSinceTested,
+      coa_file_path: t.coa_file_path || null,
     })
   }
 

@@ -13,10 +13,12 @@ export default function Table({
   onEdit,
   onDelete,
   onPromote,
+  onCoa,
   onRowClick,
   promoteLabel = 'Promote',
   promotedLabel,
   canPromote,
+  hasCoa,
   highlightRows,
   rowClassName,
   emptyMessage = 'No records found.',
@@ -136,7 +138,7 @@ export default function Table({
                     </td>
                   )
                 })}
-                {(onEdit || onDelete || onPromote) && (
+                {(onEdit || onDelete || onPromote || onCoa) && (
                   <td className="px-4 py-3.5 text-right whitespace-nowrap sticky right-0 bg-inherit z-10"
                     onClick={(e) => e.stopPropagation()}
                   >
@@ -155,6 +157,23 @@ export default function Table({
                             }`}
                           >
                             {enabled ? `${promoteLabel} →` : (promotedLabel || `${promoteLabel} ✓`)}
+                          </button>
+                        )
+                      })()}
+                      {onCoa && (() => {
+                        const hasFile = hasCoa ? hasCoa(row) : false
+                        return (
+                          <button
+                            onClick={() => onCoa(row)}
+                            title={hasFile ? 'View / update COA' : 'Upload COA'}
+                            className={`text-xs px-2.5 py-1.5 rounded-lg font-semibold border transition-colors flex items-center gap-1 ${
+                              hasFile
+                                ? 'bg-brand-50 text-brand-700 border-brand-300 hover:bg-brand-100'
+                                : 'bg-white text-gray-600 border-gray-300 hover:text-brand-700 hover:border-brand-300 hover:bg-brand-50'
+                            }`}
+                          >
+                            <span>📄</span>
+                            <span>{hasFile ? 'COA' : '+ COA'}</span>
                           </button>
                         )
                       })()}
@@ -208,8 +227,8 @@ export default function Table({
                 </div>
               )
             })}
-            {(onEdit || onDelete || onPromote) && (
-              <div className="flex gap-2 pt-2 border-t border-gray-100">
+            {(onEdit || onDelete || onPromote || onCoa) && (
+              <div className="flex gap-2 pt-2 border-t border-gray-100 flex-wrap">
                 {onPromote && (() => {
                   const enabled = canPromote ? canPromote(row) : true
                   return (
@@ -222,6 +241,12 @@ export default function Table({
                     >
                       {enabled ? `${promoteLabel} →` : (promotedLabel || `${promoteLabel} ✓`)}
                     </button>
+                  )
+                })()}
+                {onCoa && (() => {
+                  const hasFile = hasCoa ? hasCoa(row) : false
+                  return (
+                    <button onClick={(e) => { e.stopPropagation(); onCoa(row) }} className={`px-3 py-2 text-xs rounded-lg font-semibold border ${hasFile ? 'bg-brand-50 text-brand-700 border-brand-300' : 'bg-white text-gray-700 border-gray-300'}`}>📄 {hasFile ? 'COA' : '+ COA'}</button>
                   )
                 })()}
                 {onEdit && (

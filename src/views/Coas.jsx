@@ -136,6 +136,21 @@ export default function Coas() {
       },
     },
     {
+      key: 'coa_file_path',
+      label: 'File',
+      render: (v) => v ? (
+        <a
+          href={`https://uxjgqwaeruustwnxplyy.supabase.co/storage/v1/object/public/coas/${v}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-brand-100 text-brand-800 border border-brand-300 hover:bg-brand-200"
+          onClick={(e) => e.stopPropagation()}
+        >
+          📄 View
+        </a>
+      ) : <span className="text-gray-400 text-xs">—</span>,
+    },
+    {
       key: 'time_up',
       label: 'Time Up',
       render: (_, row) => {

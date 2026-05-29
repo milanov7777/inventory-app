@@ -58,6 +58,7 @@ export default function Testing({ user, session }) {
   const [confirmRow, setConfirmRow] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const [promoteForm, setPromoteForm] = useState({})
+  const [coaFile, setCoaFile] = useState(null)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState(null)
 
@@ -121,8 +122,43 @@ export default function Testing({ user, session }) {
   }
   function openPromote(row) {
     setSelectedRow(row)
-    setPromoteForm({ batch_number: row.batch_number, sku: row.sku, compound_mg: row.compound_mg, qty_available: row.vials_sent || '', approved_date: toISODate(), storage: 'shelf', notes: '' })
+    setPromoteForm({
+      batch_number: row.batch_number,
+      sku: row.sku,
+      compound_mg: row.compound_mg,
+      qty_available: row.vials_sent || '',
+      approved_date: toISODate(),
+      storage: 'shelf',
+      notes: '',
+      // COA fields — pre-fill from the testing record
+      coa_lab: row.lab || '',
+      coa_date_tested: row.date_results_received || toISODate(),
+      coa_purity: '',
+      coa_notes: '',
+      _testing_id: row.id,
+      _existing_coa_on_file: row.coa_on_file === 'yes',
+      _existing_coa_file_path: row.coa_file_path || null,
+    })
+    setCoaFile(null)
     setFormError(null); setPanelMode('promote')
+  }
+
+  function openCoa(row) {
+    setSelectedRow(row)
+    setPromoteForm({
+      batch_number: row.batch_number,
+      sku: row.sku,
+      compound_mg: row.compound_mg,
+      coa_lab: row.lab || '',
+      coa_date_tested: row.date_results_received || toISODate(),
+      coa_purity: '',
+      coa_notes: row.notes || '',
+      _testing_id: row.id,
+      _existing_coa_on_file: row.coa_on_file === 'yes',
+      _existing_coa_file_path: row.coa_file_path || null,
+    })
+    setCoaFile(null)
+    setFormError(null); setPanelMode('coa')
   }
 
   // Quick pass/fail — update the row inline
@@ -194,14 +230,97 @@ export default function Testing({ user, session }) {
   async function handlePromote(e) {
     e.preventDefault(); setSaving(true); setFormError(null)
     try {
-      const payload = { ...promoteForm, qty_available: Number(promoteForm.qty_available), logged_by: user }
-      const { error: insertErr } = await supabase.from('approved').insert(payload)
+      // 1. Insert into approved
+      const approvedPayload = {
+        batch_number: promoteForm.batch_number,
+        sku: promoteForm.sku,
+        compound_mg: promoteForm.compound_mg,
+        qty_available: Number(promoteForm.qty_available),
+        approved_date: promoteForm.approved_date,
+        storage: promoteForm.storage,
+        notes: promoteForm.notes || '',
+        logged_by: user,
+      }
+      const { error: insertErr } = await supabase.from('approved').insert(approvedPayload)
       if (insertErr) throw new Error(insertErr.message)
+
+      // 2. Update order status to 'approved'
       const { error: statusErr } = await supabase.from('orders').update({ status: 'approved' }).eq('batch_number', promoteForm.batch_number)
       if (statusErr) throw new Error(statusErr.message)
-      await logAction({ userName: user, actionType: 'promote', batchNumber: promoteForm.batch_number, stage: 'approved', changes: { from: 'testing', to: 'approved', ...payload } })
+
+      // 3. If a COA file was uploaded, store it and update the testing record
+      let coaFilePath = promoteForm._existing_coa_file_path || null
+      let coaUploaded = false
+      if (coaFile && promoteForm._testing_id) {
+        const safeName = coaFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+        const path = `${promoteForm.batch_number}/${Date.now()}-${safeName}`
+        const { error: uploadErr } = await supabase.storage.from('coas').upload(path, coaFile, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: coaFile.type || 'application/pdf',
+        })
+        if (uploadErr) throw new Error(`Failed to upload COA file: ${uploadErr.message}`)
+        coaFilePath = path
+        coaUploaded = true
+      }
+
+      // 4. Always update testing record with COA info (so it shows in COA tab)
+      if (promoteForm._testing_id) {
+        const coaNotesParts = []
+        if (promoteForm.coa_purity) coaNotesParts.push(`Purity ${promoteForm.coa_purity}`)
+        if (promoteForm.coa_notes) coaNotesParts.push(promoteForm.coa_notes)
+        const coaNotes = coaNotesParts.join('. ')
+
+        const tUpdate = { coa_on_file: 'yes' }
+        if (coaFilePath) tUpdate.coa_file_path = coaFilePath
+        if (promoteForm.coa_lab) tUpdate.lab = promoteForm.coa_lab
+        if (promoteForm.coa_date_tested) tUpdate.date_results_received = promoteForm.coa_date_tested
+        if (coaNotes) tUpdate.notes = coaNotes
+
+        const { error: tErr } = await supabase.from('testing').update(tUpdate).eq('id', promoteForm._testing_id)
+        if (tErr) console.warn('COA update failed:', tErr.message)
+      }
+
+      await logAction({ userName: user, actionType: 'promote', batchNumber: promoteForm.batch_number, stage: 'approved', changes: { from: 'testing', to: 'approved', ...approvedPayload, coa_uploaded: coaUploaded, coa_file_path: coaFilePath } })
       notifySlack('batch_approved', { batch_number: promoteForm.batch_number, user })
       await refetch()
+      setPanelMode(null)
+    } catch (err) { setFormError(err.message) } finally { setSaving(false) }
+  }
+
+  async function handleCoaSave(e) {
+    e.preventDefault(); setSaving(true); setFormError(null)
+    try {
+      let coaFilePath = promoteForm._existing_coa_file_path || null
+      if (coaFile) {
+        const safeName = coaFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+        const path = `${promoteForm.batch_number}/${Date.now()}-${safeName}`
+        const { error: uploadErr } = await supabase.storage.from('coas').upload(path, coaFile, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: coaFile.type || 'application/pdf',
+        })
+        if (uploadErr) throw new Error(`Failed to upload COA file: ${uploadErr.message}`)
+        coaFilePath = path
+      }
+
+      const coaNotesParts = []
+      if (promoteForm.coa_purity) coaNotesParts.push(`Purity ${promoteForm.coa_purity}`)
+      if (promoteForm.coa_notes) coaNotesParts.push(promoteForm.coa_notes)
+      const coaNotes = coaNotesParts.join('. ')
+
+      const updatePayload = {
+        coa_on_file: 'yes',
+        coa_file_path: coaFilePath,
+      }
+      if (promoteForm.coa_lab) updatePayload.lab = promoteForm.coa_lab
+      if (promoteForm.coa_date_tested) updatePayload.date_results_received = promoteForm.coa_date_tested
+      if (coaNotes) updatePayload.notes = coaNotes
+
+      const { error: tErr } = await supabase.from('testing').update(updatePayload).eq('id', promoteForm._testing_id)
+      if (tErr) throw new Error(`Failed to save COA: ${tErr.message}`)
+
+      await logAction({ userName: user, actionType: 'update', batchNumber: promoteForm.batch_number, stage: 'testing', changes: { coa_added: true, coa_lab: promoteForm.coa_lab, coa_file_uploaded: !!coaFile, coa_file_path: coaFilePath } })
       setPanelMode(null)
     } catch (err) { setFormError(err.message) } finally { setSaving(false) }
   }
@@ -238,6 +357,8 @@ export default function Testing({ user, session }) {
         <Table columns={columns} rows={filtered} onEdit={canEdit(session) ? openEdit : undefined} onDelete={canDelete(session) ? (row) => setConfirmRow(row) : undefined}
           onPromote={canPromote(session) ? openPromote : undefined} promoteLabel="Approve" promotedLabel="Approved ✓"
           canPromote={canApproveRow}
+          onCoa={canEdit(session) ? openCoa : undefined}
+          hasCoa={(row) => row.coa_on_file === 'yes'}
           emptyMessage="No testing records yet." />
       )}
 
@@ -303,11 +424,144 @@ export default function Testing({ user, session }) {
             </select>
           </Field>
           <Field label="Logged By"><input className={ic + ' bg-gray-50'} value={user} readOnly /></Field>
-          <Field label="Notes"><textarea className={ic} rows={3} value={promoteForm.notes || ''} onChange={(e) => setPromoteForm((p) => ({ ...p, notes: e.target.value }))} /></Field>
+          <Field label="Notes"><textarea className={ic} rows={2} value={promoteForm.notes || ''} onChange={(e) => setPromoteForm((p) => ({ ...p, notes: e.target.value }))} /></Field>
+
+          {/* COA Upload Section — adds to COA tab */}
+          <div className="border-t-2 border-brand-200 pt-4 mt-2">
+            <h3 className="text-sm font-bold text-gray-900 mb-1 flex items-center gap-2">
+              📄 Certificate of Analysis (COA)
+            </h3>
+            <p className="text-xs text-gray-500 mb-3">Upload the COA file and it will appear in the COA tab.</p>
+
+            <div className="space-y-3 bg-brand-50 border border-brand-200 rounded-lg p-3">
+              <p className="text-xs font-medium" style={{color: promoteForm._existing_coa_on_file ? '#7e22ce' : '#92400e'}}>
+                {promoteForm._existing_coa_on_file ? '✓ COA already on file for this batch — will be updated if you upload a new file.' : '⚠ No COA on file yet — adding now.'}
+              </p>
+
+              <Field label="Upload COA file (PDF, PNG, or JPG · max 10MB)">
+                <div className="space-y-2">
+                  {promoteForm._existing_coa_file_path && !coaFile && (
+                    <div className="flex items-center gap-2 text-xs bg-white border border-gray-200 rounded-md px-3 py-2">
+                      <span className="text-gray-500">📎 Current file:</span>
+                      <a
+                        href={`https://uxjgqwaeruustwnxplyy.supabase.co/storage/v1/object/public/coas/${promoteForm._existing_coa_file_path}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-brand-700 hover:underline font-medium truncate"
+                      >
+                        {promoteForm._existing_coa_file_path.split('/').pop()}
+                      </a>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="application/pdf,image/png,image/jpeg"
+                    onChange={(e) => setCoaFile(e.target.files?.[0] || null)}
+                    className="block w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-brand-600 file:text-white hover:file:bg-brand-700 file:cursor-pointer cursor-pointer"
+                  />
+                  {coaFile && (
+                    <p className="text-xs text-brand-700 font-medium">✓ Selected: {coaFile.name} ({(coaFile.size / 1024).toFixed(0)} KB)</p>
+                  )}
+                </div>
+              </Field>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Lab">
+                  <select className={ic} value={promoteForm.coa_lab || ''} onChange={(e) => setPromoteForm((p) => ({ ...p, coa_lab: e.target.value }))}>
+                    <option value="">Select lab…</option>
+                    <option value="Freedom">Freedom</option>
+                    <option value="Vanguard">Vanguard</option>
+                    <option value="Ethos">Ethos</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </Field>
+                <Field label="Date Tested">
+                  <input type="date" className={ic} value={promoteForm.coa_date_tested || ''} onChange={(e) => setPromoteForm((p) => ({ ...p, coa_date_tested: e.target.value }))} />
+                </Field>
+              </div>
+              <Field label="Purity (optional, e.g. 99.95%)">
+                <input type="text" className={ic} placeholder="99.95%" value={promoteForm.coa_purity || ''} onChange={(e) => setPromoteForm((p) => ({ ...p, coa_purity: e.target.value }))} />
+              </Field>
+              <Field label="COA Notes (optional)">
+                <textarea className={ic} rows={2} placeholder="e.g. Endotoxin PASS, COA #2511190153" value={promoteForm.coa_notes || ''} onChange={(e) => setPromoteForm((p) => ({ ...p, coa_notes: e.target.value }))} />
+              </Field>
+            </div>
+          </div>
+
           {formError && <p className="text-sm text-red-600">{formError}</p>}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={() => setPanelMode(null)} className="flex-1 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
             <button type="submit" disabled={saving} className="flex-1 py-2.5 text-sm font-medium text-white bg-cyan-600 rounded-lg hover:bg-cyan-700 disabled:opacity-50">{saving ? 'Saving...' : 'Approve Batch'}</button>
+          </div>
+        </form>
+      </SlidePanel>
+
+      {/* COA Upload Dialog — standalone action */}
+      <SlidePanel isOpen={panelMode === 'coa'} onClose={() => setPanelMode(null)} title={promoteForm._existing_coa_on_file ? 'Update COA' : 'Upload COA'}>
+        <form onSubmit={handleCoaSave} className="space-y-4">
+          <div className="bg-brand-50 border border-brand-200 rounded-lg p-3">
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Batch</p>
+            <p className="text-base font-bold text-gray-900 font-mono">{promoteForm.batch_number}</p>
+            <p className="text-sm text-gray-700 mt-1">{promoteForm.sku} · {promoteForm.compound_mg}</p>
+          </div>
+
+          <p className="text-xs font-medium {promoteForm._existing_coa_on_file ? 'text-brand-700' : 'text-amber-700'}">
+            {promoteForm._existing_coa_on_file ? '✓ This batch already has a COA on file.' : '⚠ No COA on file yet — adding now.'}
+          </p>
+
+          {/* File Upload */}
+          <Field label="COA File (PDF, PNG, or JPG · max 10MB)">
+            <div className="space-y-2">
+              {promoteForm._existing_coa_file_path && !coaFile && (
+                <div className="flex items-center gap-2 text-xs bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
+                  <span className="text-gray-500">📎 Current file:</span>
+                  <a
+                    href={`https://uxjgqwaeruustwnxplyy.supabase.co/storage/v1/object/public/coas/${promoteForm._existing_coa_file_path}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-brand-700 hover:underline font-medium truncate"
+                  >
+                    {promoteForm._existing_coa_file_path.split('/').pop()}
+                  </a>
+                </div>
+              )}
+              <input
+                type="file"
+                accept="application/pdf,image/png,image/jpeg"
+                onChange={(e) => setCoaFile(e.target.files?.[0] || null)}
+                className="block w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-brand-600 file:text-white hover:file:bg-brand-700 file:cursor-pointer cursor-pointer"
+              />
+              {coaFile && (
+                <p className="text-xs text-brand-700 font-medium">✓ Selected: {coaFile.name} ({(coaFile.size / 1024).toFixed(0)} KB)</p>
+              )}
+            </div>
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Lab">
+              <select className={ic} value={promoteForm.coa_lab || ''} onChange={(e) => setPromoteForm((p) => ({ ...p, coa_lab: e.target.value }))}>
+                <option value="">Select lab…</option>
+                <option value="Freedom">Freedom</option>
+                <option value="Vanguard">Vanguard</option>
+                <option value="Ethos">Ethos</option>
+                <option value="Other">Other</option>
+              </select>
+            </Field>
+            <Field label="Date Tested">
+              <input type="date" className={ic} value={promoteForm.coa_date_tested || ''} onChange={(e) => setPromoteForm((p) => ({ ...p, coa_date_tested: e.target.value }))} />
+            </Field>
+          </div>
+          <Field label="Purity (optional, e.g. 99.95%)">
+            <input type="text" className={ic} placeholder="99.95%" value={promoteForm.coa_purity || ''} onChange={(e) => setPromoteForm((p) => ({ ...p, coa_purity: e.target.value }))} />
+          </Field>
+          <Field label="COA Notes (optional)">
+            <textarea className={ic} rows={2} placeholder="e.g. Endotoxin PASS, COA #2511190153" value={promoteForm.coa_notes || ''} onChange={(e) => setPromoteForm((p) => ({ ...p, coa_notes: e.target.value }))} />
+          </Field>
+
+          {formError && <p className="text-sm text-red-600">{formError}</p>}
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={() => setPanelMode(null)} className="flex-1 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">Cancel</button>
+            <button type="submit" disabled={saving} className="flex-1 py-2.5 text-sm font-medium text-white gradient-btn rounded-lg disabled:opacity-50">{saving ? 'Saving...' : (promoteForm._existing_coa_on_file ? 'Update COA' : 'Save COA')}</button>
           </div>
         </form>
       </SlidePanel>

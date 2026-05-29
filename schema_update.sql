@@ -319,5 +319,10 @@ alter type storage_location add value if not exists 'box';
 -- ============================================================
 alter type storage_location add value if not exists 'overstock';
 
+-- ============================================================
+-- 26. Add coa_file_path column to testing for uploaded COA PDFs
+-- ============================================================
+alter table testing add column if not exists coa_file_path text;
+
 -- Verify
 select 'Schema update complete' as status;
