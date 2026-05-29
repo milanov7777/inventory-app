@@ -4,6 +4,7 @@ import { useOrders } from '../hooks/useOrders.js'
 import { useReceived } from '../hooks/useReceived.js'
 import { useApproved } from '../hooks/useApproved.js'
 import { useTesting } from '../hooks/useTesting.js'
+import { useOnWebsite } from '../hooks/useOnWebsite.js'
 import DashboardCard from '../components/DashboardCard.jsx'
 import AlertsPanel from '../components/AlertsPanel.jsx'
 import ActivityFeed from '../components/ActivityFeed.jsx'
@@ -18,26 +19,32 @@ export default function Dashboard({ user, session }) {
   const { received } = useReceived()
   const { approved } = useApproved()
   const { testing } = useTesting()
+  const { onWebsite } = useOnWebsite()
 
   const allSkus = useMemo(() => [...new Set(orders.map((o) => o.sku))].sort(), [orders])
 
-  // Pipeline counts — Testing uses testing table directly (same filter as Testing tab)
-  // to exclude COA-only bulk inserts (pass_fail='pass' with no date_sent)
+  // Pipeline counts — match the per-tab logic so badges + pipeline overview agree
+  // Testing: rows in testing table not yet in approved (excluding COA-only bulk inserts)
+  // Approved: rows in approved table not yet listed on website
   const pipelineCounts = useMemo(() => {
     const statusCounts = {}
     orders.forEach((o) => { statusCounts[o.status] = (statusCounts[o.status] || 0) + 1 })
     const approvedBatchSet = new Set(approved.map((r) => r.batch_number))
+    const onWebsiteBatchSet = new Set(onWebsite.map((r) => r.batch_number))
     const pendingTesting = testing.filter(
       (r) => !approvedBatchSet.has(r.batch_number) && !(r.pass_fail === 'pass' && !r.date_sent)
+    ).length
+    const pendingApproved = approved.filter(
+      (r) => !onWebsiteBatchSet.has(r.batch_number)
     ).length
     return {
       ordered: statusCounts['ordered'] || 0,
       received: statusCounts['received'] || 0,
       testing: pendingTesting,
-      approved: statusCounts['approved'] || 0,
+      approved: pendingApproved,
       on_website: statusCounts['live'] || 0,
     }
-  }, [orders, testing, approved])
+  }, [orders, testing, approved, onWebsite])
 
   // SKU inventory summary for alerts panel
   const skuSummary = useMemo(() => {

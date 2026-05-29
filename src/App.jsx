@@ -49,11 +49,18 @@ export default function App() {
     (r) => !approvedBatchSet.has(r.batch_number) && !(r.pass_fail === 'pass' && !r.date_sent)
   ).length
 
+  // Approved count: use approved table directly, same filter as Approved tab
+  // (exclude batches that have already been listed on the website)
+  const onWebsiteBatchSet = new Set(onWebsite.map((r) => r.batch_number))
+  const pendingApprovedCount = approved.filter(
+    (r) => !onWebsiteBatchSet.has(r.batch_number)
+  ).length
+
   const counts = {
     orders: statusCounts['ordered'] || 0,
     received: statusCounts['received'] || 0,
     testing: pendingTestingCount,
-    approved: statusCounts['approved'] || 0,
+    approved: pendingApprovedCount,
     on_website: statusCounts['live'] || 0,
     old_orders: onWebsite.length,
     audit_log: auditEntries.length,
