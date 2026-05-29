@@ -17,6 +17,7 @@ import { useReceived } from './hooks/useReceived.js'
 import { useTesting } from './hooks/useTesting.js'
 import { useApproved } from './hooks/useApproved.js'
 import { useOnWebsite } from './hooks/useOnWebsite.js'
+import { useWooProducts } from './hooks/useWooProducts.js'
 import { useAuditLog } from './hooks/useAuditLog.js'
 
 function loadSession() {
@@ -36,32 +37,42 @@ export default function App() {
   const { testing } = useTesting()
   const { approved } = useApproved()
   const { onWebsite } = useOnWebsite()
+  const { wooProducts } = useWooProducts()
   const { entries: auditEntries } = useAuditLog()
 
   // Count only items currently at each stage (based on orders.status)
   const statusCounts = {}
   orders.forEach((o) => { statusCounts[o.status] = (statusCounts[o.status] || 0) + 1 })
 
-  // Testing count: use testing table directly, same filter as Testing tab
+  // Testing count: rows in testing table not yet in approved
   // (exclude COA-only bulk inserts: pass_fail='pass' with no date_sent)
   const approvedBatchSet = new Set(approved.map((r) => r.batch_number))
   const pendingTestingCount = testing.filter(
     (r) => !approvedBatchSet.has(r.batch_number) && !(r.pass_fail === 'pass' && !r.date_sent)
   ).length
 
-  // Approved count: use approved table directly, same filter as Approved tab
-  // (exclude batches that have already been listed on the website)
+  // Approved count: rows in approved table not yet listed on website
   const onWebsiteBatchSet = new Set(onWebsite.map((r) => r.batch_number))
   const pendingApprovedCount = approved.filter(
     (r) => !onWebsiteBatchSet.has(r.batch_number)
   ).length
 
+  // Received count: same filter as Received tab — rows with qty remaining to test,
+  // OR batches whose order is still at status='received'
+  const orderByIdMap = {}
+  orders.forEach((o) => { if (o.id) orderByIdMap[o.id] = o })
+  const pendingReceivedCount = received.filter((r) => {
+    const hasRemaining = (r.qty_remaining ?? r.qty_received ?? 0) > 0
+    const stillReceived = orderByIdMap[r.order_id]?.status === 'received'
+    return hasRemaining || stillReceived
+  }).length
+
   const counts = {
     orders: statusCounts['ordered'] || 0,
-    received: statusCounts['received'] || 0,
+    received: pendingReceivedCount,
     testing: pendingTestingCount,
     approved: pendingApprovedCount,
-    on_website: statusCounts['live'] || 0,
+    on_website: (wooProducts || []).length,
     old_orders: onWebsite.length,
     audit_log: auditEntries.length,
   }

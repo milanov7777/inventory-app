@@ -24,27 +24,35 @@ export default function Dashboard({ user, session }) {
   const allSkus = useMemo(() => [...new Set(orders.map((o) => o.sku))].sort(), [orders])
 
   // Pipeline counts — match the per-tab logic so badges + pipeline overview agree
-  // Testing: rows in testing table not yet in approved (excluding COA-only bulk inserts)
-  // Approved: rows in approved table not yet listed on website
   const pipelineCounts = useMemo(() => {
     const statusCounts = {}
     orders.forEach((o) => { statusCounts[o.status] = (statusCounts[o.status] || 0) + 1 })
+    const orderByIdMap = {}
+    orders.forEach((o) => { if (o.id) orderByIdMap[o.id] = o })
     const approvedBatchSet = new Set(approved.map((r) => r.batch_number))
     const onWebsiteBatchSet = new Set(onWebsite.map((r) => r.batch_number))
+    // Received: rows with qty remaining OR order still at status='received'
+    const pendingReceived = received.filter((r) => {
+      const hasRemaining = (r.qty_remaining ?? r.qty_received ?? 0) > 0
+      const stillReceived = orderByIdMap[r.order_id]?.status === 'received'
+      return hasRemaining || stillReceived
+    }).length
+    // Testing: rows not yet in approved (excluding COA-only bulk inserts)
     const pendingTesting = testing.filter(
       (r) => !approvedBatchSet.has(r.batch_number) && !(r.pass_fail === 'pass' && !r.date_sent)
     ).length
+    // Approved: rows not yet listed on website
     const pendingApproved = approved.filter(
       (r) => !onWebsiteBatchSet.has(r.batch_number)
     ).length
     return {
       ordered: statusCounts['ordered'] || 0,
-      received: statusCounts['received'] || 0,
+      received: pendingReceived,
       testing: pendingTesting,
       approved: pendingApproved,
-      on_website: statusCounts['live'] || 0,
+      on_website: onWebsite.length,
     }
-  }, [orders, testing, approved, onWebsite])
+  }, [orders, received, testing, approved, onWebsite])
 
   // SKU inventory summary for alerts panel
   const skuSummary = useMemo(() => {
