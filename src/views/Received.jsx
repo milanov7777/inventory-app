@@ -201,8 +201,10 @@ export default function Received({ user, session }) {
         logged_by: user,
         notes: promoteForm.notes || null,
       }))
-      const { error: insertErr } = await supabase.from('testing').insert(testingRows)
+      // Atomic insert: capture inserted IDs so we can roll back on failure
+      const { data: insertedTesting, error: insertErr } = await supabase.from('testing').insert(testingRows).select()
       if (insertErr) throw new Error(insertErr.message)
+      const insertedTestingIds = (insertedTesting || []).map((r) => r.id)
 
       // Decrement qty_remaining on the received row
       const newRemaining = available - totalSent
@@ -210,11 +212,16 @@ export default function Received({ user, session }) {
         .from('received')
         .update({ qty_remaining: newRemaining })
         .eq('id', promoteForm.received_id)
-      if (updErr) throw new Error(updErr.message)
+      if (updErr) {
+        // Rollback: remove just-inserted testing rows
+        if (insertedTestingIds.length) await supabase.from('testing').delete().in('id', insertedTestingIds)
+        throw new Error(`Failed to update received qty: ${updErr.message}`)
+      }
 
       // If the received row links to an order, update the order status to 'in_testing'
       if (selectedRow?.order_id) {
-        await supabase.from('orders').update({ status: 'in_testing' }).eq('id', selectedRow.order_id)
+        const { error: stErr } = await supabase.from('orders').update({ status: 'in_testing' }).eq('id', selectedRow.order_id)
+        if (stErr) throw new Error(`Status update failed: ${stErr.message}`)
       }
 
       // Audit + Slack for each batch
@@ -231,7 +238,7 @@ export default function Received({ user, session }) {
   async function handleDelete() {
     if (!confirmRow) return
     try { await deleteReceived(confirmRow.id, confirmRow.batch_number, user) }
-    catch (err) { console.error(err) } finally { setConfirmRow(null) }
+    catch (err) { console.error(err); alert(`Delete failed: ${err.message}`) } finally { setConfirmRow(null) }
   }
 
   function handleExport() {

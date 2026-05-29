@@ -164,17 +164,20 @@ export default function Testing({ user, session }) {
   // Quick pass/fail — update the row inline
   async function handleQuickResult(row, result) {
     try {
-      await supabase.from('testing').update({
+      const { error: updErr } = await supabase.from('testing').update({
         pass_fail: result,
         date_results_received: toISODate(),
       }).eq('id', row.id)
+      if (updErr) throw new Error(updErr.message)
       if (result === 'fail') {
-        await supabase.from('orders').update({ status: 'failed' }).eq('batch_number', row.batch_number)
+        const { error: stErr } = await supabase.from('orders').update({ status: 'failed' }).eq('batch_number', row.batch_number)
+        if (stErr) throw new Error(stErr.message)
       }
       await logAction({ userName: user, actionType: 'update', batchNumber: row.batch_number, stage: 'testing', changes: { pass_fail: result } })
       notifySlack('test_result', { batch_number: row.batch_number, result, user })
     } catch (err) {
       console.error('Quick result failed:', err)
+      alert(`Could not save result: ${err.message}`)
     }
   }
 
@@ -230,25 +233,7 @@ export default function Testing({ user, session }) {
   async function handlePromote(e) {
     e.preventDefault(); setSaving(true); setFormError(null)
     try {
-      // 1. Insert into approved
-      const approvedPayload = {
-        batch_number: promoteForm.batch_number,
-        sku: promoteForm.sku,
-        compound_mg: promoteForm.compound_mg,
-        qty_available: Number(promoteForm.qty_available),
-        approved_date: promoteForm.approved_date,
-        storage: promoteForm.storage,
-        notes: promoteForm.notes || '',
-        logged_by: user,
-      }
-      const { error: insertErr } = await supabase.from('approved').insert(approvedPayload)
-      if (insertErr) throw new Error(insertErr.message)
-
-      // 2. Update order status to 'approved'
-      const { error: statusErr } = await supabase.from('orders').update({ status: 'approved' }).eq('batch_number', promoteForm.batch_number)
-      if (statusErr) throw new Error(statusErr.message)
-
-      // 3. If a COA file was uploaded, store it and update the testing record
+      // 1. Upload COA file FIRST so we don't approve a batch then fail on upload
       let coaFilePath = promoteForm._existing_coa_file_path || null
       let coaUploaded = false
       if (coaFile && promoteForm._testing_id) {
@@ -264,7 +249,29 @@ export default function Testing({ user, session }) {
         coaUploaded = true
       }
 
-      // 4. Always update testing record with COA info (so it shows in COA tab)
+      // 2. Insert into approved
+      const approvedPayload = {
+        batch_number: promoteForm.batch_number,
+        sku: promoteForm.sku,
+        compound_mg: promoteForm.compound_mg,
+        qty_available: Number(promoteForm.qty_available),
+        approved_date: promoteForm.approved_date,
+        storage: promoteForm.storage,
+        notes: promoteForm.notes || '',
+        logged_by: user,
+      }
+      const { data: insertedApproved, error: insertErr } = await supabase.from('approved').insert(approvedPayload).select().single()
+      if (insertErr) throw new Error(insertErr.message)
+
+      // 3. Update order status to 'approved'
+      const { error: statusErr } = await supabase.from('orders').update({ status: 'approved' }).eq('batch_number', promoteForm.batch_number)
+      if (statusErr) {
+        // Rollback approved insert so user can retry cleanly
+        if (insertedApproved?.id) await supabase.from('approved').delete().eq('id', insertedApproved.id)
+        throw new Error(`Status update failed: ${statusErr.message}`)
+      }
+
+      // 4. Update testing record with COA info (so it shows in COA tab)
       if (promoteForm._testing_id) {
         const coaNotesParts = []
         if (promoteForm.coa_purity) coaNotesParts.push(`Purity ${promoteForm.coa_purity}`)
@@ -278,7 +285,7 @@ export default function Testing({ user, session }) {
         if (coaNotes) tUpdate.notes = coaNotes
 
         const { error: tErr } = await supabase.from('testing').update(tUpdate).eq('id', promoteForm._testing_id)
-        if (tErr) console.warn('COA update failed:', tErr.message)
+        if (tErr) throw new Error(`Failed to update COA info: ${tErr.message}`)
       }
 
       await logAction({ userName: user, actionType: 'promote', batchNumber: promoteForm.batch_number, stage: 'approved', changes: { from: 'testing', to: 'approved', ...approvedPayload, coa_uploaded: coaUploaded, coa_file_path: coaFilePath } })
@@ -328,7 +335,7 @@ export default function Testing({ user, session }) {
   async function handleDelete() {
     if (!confirmRow) return
     try { await deleteTesting(confirmRow.id, confirmRow.batch_number, user) }
-    catch (err) { console.error(err) } finally { setConfirmRow(null) }
+    catch (err) { console.error(err); alert(`Delete failed: ${err.message}`) } finally { setConfirmRow(null) }
   }
 
   function handleExport() {
@@ -377,7 +384,7 @@ export default function Testing({ user, session }) {
             </select>
           </Field>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Vials Sent"><input type="number" min="0" className={ic} value={form.vials_sent} onChange={(e) => f('vials_sent', e.target.value)} placeholder="0" /></Field>
+            <Field label="Vials Sent"><input type="number" min="1" className={ic} value={form.vials_sent} onChange={(e) => f('vials_sent', e.target.value)} placeholder="1" /></Field>
             <Field label="Date Sent"><input type="date" className={ic} value={form.date_sent} onChange={(e) => f('date_sent', e.target.value)} /></Field>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -412,7 +419,7 @@ export default function Testing({ user, session }) {
           <Field label="SKU"><input className={ic + ' bg-gray-50'} value={promoteForm.sku || ''} readOnly /></Field>
           <Field label="Compound & MG"><input className={ic + ' bg-gray-50'} value={promoteForm.compound_mg || ''} readOnly /></Field>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Qty Available" required><input type="number" min="0" className={ic} value={promoteForm.qty_available || ''} onChange={(e) => setPromoteForm((p) => ({ ...p, qty_available: e.target.value }))} required /></Field>
+            <Field label="Qty Available" required><input type="number" min="1" className={ic} value={promoteForm.qty_available || ''} onChange={(e) => setPromoteForm((p) => ({ ...p, qty_available: e.target.value }))} required /></Field>
             <Field label="Approved Date" required><input type="date" className={ic} value={promoteForm.approved_date || ''} onChange={(e) => setPromoteForm((p) => ({ ...p, approved_date: e.target.value }))} required /></Field>
           </div>
           <Field label="Storage" required>

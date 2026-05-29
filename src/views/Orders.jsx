@@ -202,13 +202,18 @@ export default function Orders({ user, session }) {
         notes: promoteForm.notes || null,
         logged_by: user,
       }
-      const { error: insertErr } = await supabase.from('received').insert(payload)
+      // Atomic: insert + status update, with rollback on partial failure
+      const { data: inserted, error: insertErr } = await supabase.from('received').insert(payload).select().single()
       if (insertErr) throw new Error(insertErr.message)
       const { error: statusErr } = await supabase
         .from('orders')
         .update({ status: 'received' })
         .eq('id', promoteForm.order_id)
-      if (statusErr) throw new Error(statusErr.message)
+      if (statusErr) {
+        // Rollback: remove the just-inserted received row so the data isn't half-promoted
+        if (inserted?.id) await supabase.from('received').delete().eq('id', inserted.id)
+        throw new Error(`Status update failed: ${statusErr.message}`)
+      }
       await logAction({ userName: user, actionType: 'promote', batchNumber: null, stage: 'received', changes: { from: 'orders', to: 'received', order_id: promoteForm.order_id, ...payload } })
       notifySlack('order_received', { batch_number: '(no batch yet)', user })
       await refetch()
@@ -226,6 +231,7 @@ export default function Orders({ user, session }) {
       await deleteOrder(confirmRow.id, confirmRow.batch_number, user)
     } catch (err) {
       console.error(err)
+      alert(`Delete failed: ${err.message}`)
     } finally {
       setConfirmRow(null)
     }

@@ -157,10 +157,14 @@ export default function Approved({ user, session }) {
     e.preventDefault(); setSaving(true); setFormError(null)
     try {
       const payload = { ...promoteForm, qty_listed: Number(promoteForm.qty_listed), price_listed: Number(promoteForm.price_listed) }
-      const { error: insertErr } = await supabase.from('on_website').insert(payload)
+      // Atomic: insert + status update, with rollback on partial failure
+      const { data: insertedRow, error: insertErr } = await supabase.from('on_website').insert(payload).select().single()
       if (insertErr) throw new Error(insertErr.message)
       const { error: statusErr } = await supabase.from('orders').update({ status: 'live' }).eq('batch_number', promoteForm.batch_number)
-      if (statusErr) throw new Error(statusErr.message)
+      if (statusErr) {
+        if (insertedRow?.id) await supabase.from('on_website').delete().eq('id', insertedRow.id)
+        throw new Error(`Status update failed: ${statusErr.message}`)
+      }
       await logAction({ userName: user, actionType: 'promote', batchNumber: promoteForm.batch_number, stage: 'on_website', changes: { from: 'approved', to: 'on_website', ...payload } })
       notifySlack('listed_on_website', { batch_number: promoteForm.batch_number, user })
       await refetch()
@@ -171,7 +175,7 @@ export default function Approved({ user, session }) {
   async function handleDelete() {
     if (!confirmRow) return
     try { await deleteApproved(confirmRow.id, confirmRow.batch_number, user) }
-    catch (err) { console.error(err) } finally { setConfirmRow(null) }
+    catch (err) { console.error(err); alert(`Delete failed: ${err.message}`) } finally { setConfirmRow(null) }
   }
 
   function handleExport() {

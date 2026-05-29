@@ -129,7 +129,7 @@ export default function OldOrders({ user, session }) {
   async function handleDelete() {
     if (!confirmRow) return
     try { await deleteOnWebsite(confirmRow.id, confirmRow.batch_number, user) }
-    catch (err) { console.error(err) } finally { setConfirmRow(null) }
+    catch (err) { console.error(err); alert(`Delete failed: ${err.message}`) } finally { setConfirmRow(null) }
   }
 
   function handleExport() {
